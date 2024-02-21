@@ -1,0 +1,5 @@
+<library path="lib/libRos2JsonBridge">
+  <class name="ros2json_bridge/Ros2JsonBridge" type="ros2json_bridge::Ros2JsonBridge" base_class_type="nodelet::Nodelet">
+    <description>Ros2jsonBridge nodelet</description>
+  </class>
+</library>

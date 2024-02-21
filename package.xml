@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="2">
+
+  <name>ros2json_bridge</name>
+  <version>1.0.0</version>
+  <description>Node to translate messages from ROS to JSON format</description>
+
+  <maintainer email="spurny@fly4future.com">Vojtech Spurny</maintainer>
+  <author email="spurny@fly4future.com">Vojtech Spurny</author>
+
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>cmake_modules</depend>
+  <depend>roscpp</depend>
+  <depend>nodelet</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>mrs_msgs</depend>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelets.xml" />
+  </export>
+
+</package>
