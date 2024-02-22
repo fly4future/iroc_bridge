@@ -40,7 +40,7 @@ windows:
   - ros2json_bridge:
       layout: tiled
       panes:
-        - waitForHw; export NS_NAME=$UAV_NAME; roslaunch example_ros2json_bridge ros2json_bridge.launch
+        - waitForHw; export NS_NAME=$UAV_NAME; roslaunch ros2json_bridge ros2json_bridge.launch
   - rviz:
       layout: tiled
       panes:
