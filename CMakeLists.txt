@@ -8,9 +8,8 @@ set(CATKIN_DEPENDENCIES
   cmake_modules
   roscpp
   nodelet
-  nav_msgs
   mrs_msgs
-  geometry_msgs
+  mrs_lib
   )
 
 set(LIBRARIES
@@ -57,7 +56,7 @@ install(TARGETS ${LIBRARIES}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
   )
 
-install(DIRECTORY launch 
+install(DIRECTORY launch config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   )
 

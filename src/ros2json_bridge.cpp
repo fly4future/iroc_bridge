@@ -2,14 +2,14 @@
 
 /* each ros package must have these */
 #include <ros/ros.h>
-#include <ros/package.h>
 #include <nodelet/nodelet.h>
 
-/* for storing information about the state of the uav (position, twist) + covariances */
-#include <nav_msgs/Odometry.h>
+#include <mrs_lib/param_loader.h>
+#include <mrs_lib/mutex.h>
+#include <mrs_lib/subscribe_handler.h>
 
 /* custom msgs of MRS group */
-#include <mrs_msgs/ReferenceStamped.h>
+#include <mrs_msgs/UavStatus.h>
 
 //}
 
@@ -21,25 +21,20 @@ namespace ros2json_bridge
 class Ros2JsonBridge : public nodelet::Nodelet {
 
 public:
-  /* onInit() is called when nodelet is launched (similar to main() in regular node) */
   virtual void onInit();
 
 private:
-  // | -------------------------- flags ------------------------- |
-
-  /* is set to true when the nodelet is initialized, useful for rejecting callbacks that are called before the node is initialized */
+  ros::NodeHandle   nh_;
   std::atomic<bool> is_initialized_ = false;
 
-  /* by default, the nodelet is deactivated, it only starts publishing goals when activated */
-  std::atomic<bool> have_odom_ = false;
-
-  /* ROS messages which store the current reference and odometry */
-  mrs_msgs::ReferenceStamped ref_;
-  nav_msgs::Odometry         current_odom_;
-
   // | ---------------------- ROS subscribers --------------------- |
-  ros::Subscriber sub_odom_;
-  void            callbackOdom(const nav_msgs::Odometry& msg);
+  mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>     sh_uav_status_;
+
+  // | ----------------------- main timer ----------------------- |
+
+  ros::Timer timer_main_;
+  void       timerMain(const ros::TimerEvent& event);
+  double     _main_timer_rate_;
 
 };
 //}
@@ -49,33 +44,78 @@ private:
 void Ros2JsonBridge::onInit() {
 
   /* obtain node handle */
-  ros::NodeHandle nh = nodelet::Nodelet::getMTPrivateNodeHandle();
+  nh_ = nodelet::Nodelet::getMTPrivateNodeHandle();
 
   /* waits for the ROS to publish clock */
   ros::Time::waitForValid();
 
-  // | -------- initialize a subscriber for UAV odometry -------- |
-  sub_odom_ = nh.subscribe("odom_in", 10, &Ros2JsonBridge::callbackOdom, this, ros::TransportHints().tcpNoDelay());
+  /* load parameters */
+  mrs_lib::ParamLoader param_loader(nh_, "Ros2JsonBridge");
 
-  is_initialized_   = true;
+  std::string custom_config_path;
+
+  param_loader.loadParam("custom_config", custom_config_path);
+
+  if (custom_config_path != "") {
+    param_loader.addYamlFile(custom_config_path);
+  }
+  
+  param_loader.addYamlFileFromParam("config");
+
+  param_loader.loadParam("main_timer_rate", _main_timer_rate_);
+
+  if (!param_loader.loadedSuccessfully()) {
+    ROS_ERROR("[Ros2JsonBridge]: Could not load all parameters!");
+    ros::shutdown();
+  }
+
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "Ros2JsonBridge";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  sh_uav_status_      = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
+
+  // | ------------------------- timers ------------------------- |
+
+  timer_main_ = nh_.createTimer(ros::Rate(_main_timer_rate_), &Ros2JsonBridge::timerMain, this);
+
+  // | --------------------- finish the init -------------------- |
+
+  is_initialized_ = true;
+
+  ROS_INFO_THROTTLE(1.0, "[Ros2JsonBridge]: initialized");
 }
 
 //}
 
-// | ---------------------- msg callbacks --------------------- |
+// --------------------------------------------------------------
+// |                           timers                           |
+// --------------------------------------------------------------
 
-/* callbackControlManagerDiag() //{ */
+/* timerMain() //{ */
 
+void Ros2JsonBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 
-void Ros2JsonBridge::callbackOdom(const nav_msgs::Odometry& msg) {
-
-  /* do not continue if the nodelet is not initialized */
   if (!is_initialized_) {
     return;
   }
-  // | -------------- save the current UAV odometry ------------- |
-  current_odom_ = msg;
-  have_odom_    = true;
+
+  bool got_uav_status     = sh_uav_status_.hasMsg();
+
+  if (!got_uav_status) {
+    ROS_WARN_THROTTLE(5.0, "[Ros2JsonBridge]: waiting for data: UavStatus=%s", got_uav_status ? "true" : "FALSE");
+    return;
+  }
+
+  auto uav_status = sh_uav_status_.getMsg();
+
 }
 
 //}

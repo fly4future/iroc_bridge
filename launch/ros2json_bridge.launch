@@ -1,29 +1,36 @@
 <launch>
 
-  <!-- defines name of the namespace of the drone -->
-  <arg name="UAV_NAME" default="$(optenv UAV_NAME uav1)" />
+  <!-- defines name of the namespace -->
+  <arg name="NS_NAME" default="$(optenv NS_NAME uav1)" />
 
-    <!-- will it run using GNU debugger? -->
+  <arg name="custom_config" default="" />
+
+  <!-- will it run using GNU debugger? -->
   <arg name="DEBUG" default="false" />
   <arg unless="$(arg DEBUG)" name="launch_prefix_debug" value=""/>
   <arg     if="$(arg DEBUG)" name="launch_prefix_debug" value="debug_roslaunch"/>
 
-    <!-- will it run as standalone nodelet or using a nodelet manager? -->
+  <!-- will it run as standalone nodelet or using a nodelet manager? -->
   <arg name="standalone" default="true" />
-  <arg name="manager" default="$(arg UAV_NAME)_waypointflier_manager" />
+  <arg name="manager" default="$(arg NS_NAME)_ros2json_bridge_manager" />
   <arg unless="$(arg standalone)" name="nodelet" value="load"/>
   <arg     if="$(arg standalone)" name="nodelet" value="standalone"/>
   <arg unless="$(arg standalone)" name="nodelet_manager" value="$(arg manager)"/>
   <arg     if="$(arg standalone)" name="nodelet_manager" value=""/>
 
-    <!-- Namespace - all topics, services and parameters will be remapped using this namespace as a prefix (eg.: "/ros2json_bridge/odom_uav_in" to "/uav1/ros2json_bridge/odom_uav_in") -->
-  <group ns="$(arg UAV_NAME)">
+  <group ns="$(arg NS_NAME)">
 
     <!-- Ros2jsonBridge nodelet -->
-    <node pkg="nodelet" type="nodelet" name="ros2json_bridge" args="$(arg nodelet) example_ros2json_bridge/Ros2JsonBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
+    <node pkg="nodelet" type="nodelet" name="ros2json_bridge" args="$(arg nodelet) ros2json_bridge/Ros2JsonBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
 
-        <!-- Subscribers (note that the topic names will also be remapped using the namespace as a prefix) -->
-      <remap from="~odom_in" to="estimation_manager/odom_main" />
+      <param name="config" value="$(find ros2json_bridge)/config/config.yaml" />
+
+      <param if="$(eval arg('custom_config') == '')" name="custom_config" value="" />
+      <param if="$(eval not arg('custom_config') == '' and arg('custom_config')[0] == '/')" name="custom_config" value="$(arg custom_config)" />
+      <param if="$(eval not arg('custom_config') == '' and not arg('custom_config')[0] == '/')" name="custom_config" value="$(env PWD)/$(arg custom_config)" />
+
+      <!-- Subscribers (note that the topic names will also be remapped using the namespace as a prefix) -->
+      <remap from="~uav_status_in" to="mrs_uav_status/uav_status" />
 
     </node>
 
