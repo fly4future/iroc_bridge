@@ -12,7 +12,7 @@
 
   <!-- will it run as standalone nodelet or using a nodelet manager? -->
   <arg name="standalone" default="true" />
-  <arg name="manager" default="$(arg NS_NAME)_ros2json_bridge_manager" />
+  <arg name="manager" default="$(arg NS_NAME)_iroc_bridge_manager" />
   <arg unless="$(arg standalone)" name="nodelet" value="load"/>
   <arg     if="$(arg standalone)" name="nodelet" value="standalone"/>
   <arg unless="$(arg standalone)" name="nodelet_manager" value="$(arg manager)"/>
@@ -20,10 +20,10 @@
 
   <group ns="$(arg NS_NAME)">
 
-    <!-- Ros2jsonBridge nodelet -->
-    <node pkg="nodelet" type="nodelet" name="ros2json_bridge" args="$(arg nodelet) ros2json_bridge/Ros2JsonBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
+    <!-- IROCBridge nodelet -->
+    <node pkg="nodelet" type="nodelet" name="iroc_bridge" args="$(arg nodelet) iroc_bridge/IROCBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
 
-      <param name="config" value="$(find ros2json_bridge)/config/config.yaml" />
+      <param name="config" value="$(find iroc_bridge)/config/config.yaml" />
 
       <param if="$(eval arg('custom_config') == '')" name="custom_config" value="" />
       <param if="$(eval not arg('custom_config') == '' and arg('custom_config')[0] == '/')" name="custom_config" value="$(arg custom_config)" />

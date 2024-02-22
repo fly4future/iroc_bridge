@@ -37,10 +37,10 @@ windows:
           custom_config:=./config/custom_config.yaml
           world_config:=./config/world_config.yaml
           network_config:=./config/network_config.yaml
-  - ros2json_bridge:
+  - iroc_bridge:
       layout: tiled
       panes:
-        - waitForHw; export NS_NAME=$UAV_NAME; roslaunch ros2json_bridge ros2json_bridge.launch
+        - waitForHw; export NS_NAME=$UAV_NAME; roslaunch iroc_bridge iroc_bridge.launch
   - rviz:
       layout: tiled
       panes:

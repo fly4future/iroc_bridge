@@ -15,14 +15,14 @@
 
 //}
 
-namespace ros2json_bridge
+namespace iroc_bridge
 {
 
 using json = nlohmann::json;
 
-/* class Ros2JsonBridge //{ */
+/* class IROCBridge //{ */
 
-class Ros2JsonBridge : public nodelet::Nodelet {
+class IROCBridge : public nodelet::Nodelet {
 public:
   virtual void onInit();
 
@@ -44,13 +44,13 @@ private:
   // | ------------------ Additional functions ------------------ |
 
   void parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status);
-  void sendJsonMessage(const json &json_msg);
+  void sendJsonMessage(const std::string &msg_type, const json &json_msg);
 };
 //}
 
 /* onInit() //{ */
 
-void Ros2JsonBridge::onInit() {
+void IROCBridge::onInit() {
 
   /* obtain node handle */
   nh_ = nodelet::Nodelet::getMTPrivateNodeHandle();
@@ -61,7 +61,7 @@ void Ros2JsonBridge::onInit() {
   last_update_time_ = ros::Time(0);
 
   /* load parameters */
-  mrs_lib::ParamLoader param_loader(nh_, "Ros2JsonBridge");
+  mrs_lib::ParamLoader param_loader(nh_, "IROCBridge");
 
   std::string custom_config_path;
 
@@ -76,7 +76,7 @@ void Ros2JsonBridge::onInit() {
   param_loader.loadParam("main_timer_rate", _main_timer_rate_);
 
   if (!param_loader.loadedSuccessfully()) {
-    ROS_ERROR("[Ros2JsonBridge]: Could not load all parameters!");
+    ROS_ERROR("[IROCBridge]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -84,7 +84,7 @@ void Ros2JsonBridge::onInit() {
 
   mrs_lib::SubscribeHandlerOptions shopts;
   shopts.nh                 = nh_;
-  shopts.node_name          = "Ros2JsonBridge";
+  shopts.node_name          = "IROCBridge";
   shopts.no_message_timeout = mrs_lib::no_timeout;
   shopts.threadsafe         = true;
   shopts.autostart          = true;
@@ -95,13 +95,13 @@ void Ros2JsonBridge::onInit() {
 
   // | ------------------------- timers ------------------------- |
 
-  timer_main_ = nh_.createTimer(ros::Rate(_main_timer_rate_), &Ros2JsonBridge::timerMain, this);
+  timer_main_ = nh_.createTimer(ros::Rate(_main_timer_rate_), &IROCBridge::timerMain, this);
 
   // | --------------------- finish the init -------------------- |
 
   is_initialized_ = true;
 
-  ROS_INFO_THROTTLE(1.0, "[Ros2JsonBridge]: initialized");
+  ROS_INFO_THROTTLE(1.0, "[IROCBridge]: initialized");
 }
 
 //}
@@ -112,7 +112,7 @@ void Ros2JsonBridge::onInit() {
 
 /* timerMain() //{ */
 
-void Ros2JsonBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
+void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
 
   if (!is_initialized_) {
     return;
@@ -124,7 +124,7 @@ void Ros2JsonBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
   if (!got_uav_status) {
     ros::Duration last_message_diff = time_now - last_update_time_;
     if(last_message_diff > ros::Duration(5.0)){
-      ROS_INFO_THROTTLE(5.0, "[Ros2JsonBridge]: waiting for ROS data");
+      ROS_INFO_THROTTLE(5.0, "[IROCBridge]: waiting for ROS data");
     }
     return;
   }
@@ -143,8 +143,8 @@ void Ros2JsonBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
 //
 /* parseUavPosition() //{ */
 
-void Ros2JsonBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
-  /* ROS_INFO("[Ros2JsonBridge]: UavPosition: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", */ 
+void IROCBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
+  /* ROS_INFO("[IROCBridge]: UavPosition: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", */ 
   /*     uav_status->odom_x, uav_status->odom_y, uav_status->odom_z, uav_status->odom_hdg); */
 
   const json json_msg = {
@@ -153,18 +153,18 @@ void Ros2JsonBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_sta
       {"z", uav_status->odom_z},
       {"heading", uav_status->odom_hdg},
   };
-  sendJsonMessage(json_msg);
+  sendJsonMessage("UavPosition", json_msg);
 }
 
 //}
 
 /* sendJsonMessage() //{ */
 
-void Ros2JsonBridge::sendJsonMessage(const json &json_msg) {
+void IROCBridge::sendJsonMessage(const std::string &msg_type, const json &json_msg) {
   // Fill calls for restAPI
   // TODO: Add communication with restAPI
   const int print_indent = 2;
-  ROS_INFO_STREAM("[Ros2JsonBridge]: sending msg: \n" << json_msg.dump(print_indent));
+  ROS_INFO("[IROCBridge]: sending \"%s\" msg: \n%s", msg_type.c_str(), json_msg.dump(print_indent).c_str());
   return;
 }
 
@@ -173,8 +173,7 @@ void Ros2JsonBridge::sendJsonMessage(const json &json_msg) {
 //}
 
 
-}  // namespace ros2json_bridge
+}  // namespace iroc_bridge
 
-/* every nodelet must include macros which export the class as a nodelet plugin */
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(ros2json_bridge::Ros2JsonBridge, nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(iroc_bridge::IROCBridge, nodelet::Nodelet);

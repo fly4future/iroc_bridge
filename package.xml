@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
 
-  <name>ros2json_bridge</name>
+  <name>iroc_bridge</name>
   <version>1.0.0</version>
-  <description>Node to translate messages from ROS to JSON format</description>
+  <description>Node to translate messages from ROS to backend and back</description>
 
   <maintainer email="spurny@fly4future.com">Vojtech Spurny</maintainer>
   <author email="spurny@fly4future.com">Vojtech Spurny</author>

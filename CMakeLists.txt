@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15.0)
-project(ros2json_bridge)
+project(iroc_bridge)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,7 +13,7 @@ set(CATKIN_DEPENDENCIES
   )
 
 set(LIBRARIES
-  Ros2JsonBridge
+  IROCBridge
   )
 
 find_package(catkin REQUIRED COMPONENTS
@@ -30,20 +30,20 @@ include_directories(
   include
   )
 
-# Ros2JsonBridge
+# IROCBridge
 
 ## Declare a C++ library
-add_library(Ros2JsonBridge
-  src/ros2json_bridge.cpp
+add_library(IROCBridge
+  src/iroc_bridge.cpp
   )
 
-add_dependencies(Ros2JsonBridge
+add_dependencies(IROCBridge
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   )
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(Ros2JsonBridge
+target_link_libraries(IROCBridge
   ${catkin_LIBRARIES}
   )
 
