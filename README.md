@@ -2,7 +2,7 @@
  
 ## Functionality
 
-* Once activated, the nodelet will listen mrs_uav_status message
+* Once activated, the nodelet will listen mrs_uav_status message and translate it to JSON format
 
 ## How to start
 
