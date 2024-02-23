@@ -99,9 +99,9 @@ void IROCBridge::onInit() {
 
   // | --------------------- finish the init -------------------- |
 
+  ROS_INFO("[IROCBridge]: initialized");
+  ROS_INFO("[IROCBridge]: --------------------");
   is_initialized_ = true;
-
-  ROS_INFO_THROTTLE(1.0, "[IROCBridge]: initialized");
 }
 
 //}
@@ -124,7 +124,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
   if (!got_uav_status) {
     ros::Duration last_message_diff = time_now - last_update_time_;
     if(last_message_diff > ros::Duration(5.0)){
-      ROS_INFO_THROTTLE(5.0, "[IROCBridge]: waiting for ROS data");
+      ROS_WARN_THROTTLE(5.0, "[IROCBridge]: waiting for ROS data");
     }
     return;
   }
