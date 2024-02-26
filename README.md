@@ -5,6 +5,15 @@
 * Once activated, the nodelet will listen mrs_uav_status message and translate it to JSON format
 
 ## How to start
+You must have installed the MRS system on your PC (ROS1). 
+The steps are in the [README](https://github.com/ctu-mrs/mrs_uav_system/blob/master/README.md).
+
+`The recommended way is to use native installation and a stable version`
+
+https://github.com/ctu-mrs/mrs_uav_system/blob/master/README.md#native-installation.  
+
+### How to run
+You can run the whole simulation, including the iroc_bridge package, using the prepared tmux session
 
 ```bash
 ./tmux/one_drone/start.sh
