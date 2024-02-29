@@ -10,6 +10,7 @@ set(CATKIN_DEPENDENCIES
   nodelet
   mrs_msgs
   mrs_lib
+  sensor_msgs
   )
 
 set(LIBRARIES
