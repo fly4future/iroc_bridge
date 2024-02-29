@@ -10,6 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <sensor_msgs/NavSatFix.h>
+
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
 
@@ -34,6 +36,7 @@ private:
 
   // | ---------------------- ROS subscribers --------------------- |
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
+  mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
 
   // | ----------------------- main timer ----------------------- |
 
@@ -43,7 +46,8 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status);
+  void parseLocalPosition(const mrs_msgs::UavStatusConstPtr &uav_status);
+  void parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr &global_position);
   void sendJsonMessage(const std::string &msg_type, const json &json_msg);
 };
 //}
@@ -92,6 +96,7 @@ void IROCBridge::onInit() {
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
   sh_uav_status_ = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
+  sh_hw_api_gnss_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "hw_api_gnss_in");
 
   // | ------------------------- timers ------------------------- |
 
@@ -119,9 +124,10 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
   }
 
   bool got_uav_status = sh_uav_status_.newMsg();
+  bool got_hw_api_gnss = sh_hw_api_gnss_.newMsg();
   ros::Time time_now = ros::Time::now();
 
-  if (!got_uav_status) {
+  if (!got_uav_status && !got_hw_api_gnss) {
     ros::Duration last_message_diff = time_now - last_update_time_;
     if(last_message_diff > ros::Duration(5.0)){
       ROS_WARN_THROTTLE(5.0, "[IROCBridge]: waiting for ROS data");
@@ -130,10 +136,17 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
   }
 
 
-  auto uav_status = sh_uav_status_.getMsg();
-  parseUavPosition(uav_status);
-  /* TODO: add more messages types */
+  if (got_uav_status){
+    auto uav_status = sh_uav_status_.getMsg();
+    parseLocalPosition(uav_status);
+  }
+
+  if (got_hw_api_gnss){
+    auto hw_api_gnss = sh_hw_api_gnss_.getMsg();
+    parseGlobalPosition(hw_api_gnss);
+  }
   
+  /* TODO: add more messages types */
   last_update_time_ = time_now;
 }
 
@@ -141,11 +154,11 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
 
 // | -------------------- support functions ------------------- |
 //
-/* parseUavPosition() //{ */
+/* parseLocalPosition() //{ */
 
-void IROCBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
-  /* ROS_INFO("[IROCBridge]: UavPosition: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", */ 
-  /*     uav_status->odom_x, uav_status->odom_y, uav_status->odom_z, uav_status->odom_hdg); */
+void IROCBridge::parseLocalPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
+  ROS_INFO_THROTTLE(1,"[IROCBridge]: LocalPosition: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", 
+      uav_status->odom_x, uav_status->odom_y, uav_status->odom_z, uav_status->odom_hdg);
 
   const json json_msg = {
       {"x", uav_status->odom_x},
@@ -153,7 +166,23 @@ void IROCBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status)
       {"z", uav_status->odom_z},
       {"heading", uav_status->odom_hdg},
   };
-  sendJsonMessage("UavPosition", json_msg);
+  sendJsonMessage("LocalPosition", json_msg);
+}
+
+//}
+
+/* parseGlobalPosition() //{ */
+
+void IROCBridge::parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr &global_position) {
+  ROS_INFO_THROTTLE(1,"[IROCBridge]: GlobalPosition: lat: %.2f, lon: %.2f, alt: %.2f", 
+      global_position->latitude, global_position->longitude, global_position->altitude);
+
+  const json json_msg = {
+      {"latitude", global_position->latitude},
+      {"longitude", global_position->longitude},
+      {"altitude", global_position->altitude},
+  };
+  sendJsonMessage("GlobalPosition", json_msg);
 }
 
 //}
@@ -163,8 +192,8 @@ void IROCBridge::parseUavPosition(const mrs_msgs::UavStatusConstPtr &uav_status)
 void IROCBridge::sendJsonMessage(const std::string &msg_type, const json &json_msg) {
   // Fill calls for restAPI
   // TODO: Add communication with restAPI
-  const int print_indent = 2;
-  ROS_INFO("[IROCBridge]: sending \"%s\" msg: \n%s", msg_type.c_str(), json_msg.dump(print_indent).c_str());
+  /* const int print_indent = 2; */
+  /* ROS_INFO("[IROCBridge]: sending \"%s\" msg: \n%s", msg_type.c_str(), json_msg.dump(print_indent).c_str()); */
   return;
 }
 

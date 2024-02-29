@@ -17,6 +17,7 @@
   <depend>nodelet</depend>
   <depend>mrs_msgs</depend>
   <depend>mrs_lib</depend>
+  <depend>sensor_msgs</depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelets.xml" />
