@@ -2,7 +2,8 @@
  
 ## Functionality
 
-* Once activated, the nodelet will listen mrs_uav_status message and translate it to JSON format
+* Once activated, the nodelet listens to the `uavX/mrs_uav_status/uav_status` topic and translates the messages from ROS to a JSON format.
+* Documentation of the relevant message type `mrs_msgs/UavStatus` is available [here](https://ctu-mrs.github.io/mrs_msgs/msg/UavStatus.html).
 
 ## Dependencies 
 You must have installed the MRS system on your PC (ROS1).
