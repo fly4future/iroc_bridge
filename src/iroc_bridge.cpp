@@ -9,14 +9,16 @@
 #include <mrs_lib/subscribe_handler.h>
 
 #include <nlohmann/json.hpp>
+#include <elnormous/HTTPRequest.hpp>
 
 #include <sensor_msgs/NavSatFix.h>
 
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
+#include <string.h>
 
 //}
-
+using std::string;
 namespace iroc_bridge
 {
 
@@ -194,6 +196,25 @@ void IROCBridge::sendJsonMessage(const std::string &msg_type, const json &json_m
   // TODO: Add communication with restAPI
   /* const int print_indent = 2; */
   /* ROS_INFO("[IROCBridge]: sending \"%s\" msg: \n%s", msg_type.c_str(), json_msg.dump(print_indent).c_str()); */
+  
+
+  try
+  {
+      http::Request request{"http://127.0.0.1:8000/api/robot/telemetry/" + msg_type};
+      const string body = json_msg.dump();
+
+      // ROS_INFO_THROTTLE(1,body);
+      const auto response = request.send("PATCH", body, {
+          {"Content-Type", "application/x-www-form-urlencoded"}
+      });
+      std::cout << std::string{response.body.begin(), response.body.end()} << '\n'; // print the result
+  }
+  catch (const std::exception& e)
+  {
+      std::cerr << "Request failed, error: " << e.what() << '\n';
+  }
+
+
   return;
 }
 
