@@ -9,7 +9,7 @@
 #include <mrs_lib/subscribe_handler.h>
 
 #include <nlohmann/json.hpp>
-#include <elnormous/HTTPRequest.hpp>
+#include <httplib/httplib.h>
 
 #include <sensor_msgs/NavSatFix.h>
 
@@ -35,6 +35,9 @@ private:
   std::atomic<bool> is_initialized_ = false;
 
   ros::Time last_update_time_;
+
+  std::unique_ptr<httplib::Client> http_client_;
+  httplib::Server http_srv_;
 
   // | ---------------------- ROS subscribers --------------------- |
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
@@ -85,6 +88,15 @@ void IROCBridge::onInit() {
     ROS_ERROR("[IROCBridge]: Could not load all parameters!");
     ros::shutdown();
   }
+
+  http_client_ = std::make_unique<httplib::Client>("http://127.0.0.1:8000");
+
+  http_srv_.Get("/takeoff", [](const httplib::Request &, httplib::Response &res)
+      {
+        res.set_content("TBD", "text/plain");
+      });
+
+  http_srv_.listen("127.0.0.1", 8080);
 
   // | ----------------------- subscribers ---------------------- |
 
@@ -200,18 +212,19 @@ void IROCBridge::sendJsonMessage(const std::string &msg_type, const json &json_m
 
   try
   {
-      http::Request request{"http://127.0.0.1:8000/api/robot/telemetry/" + msg_type};
-      const string body = json_msg.dump();
+    const string body = json_msg.dump();
+    const auto res = http_client_->Patch("api/robot/telemetry/" + msg_type, body, "application/x-www-form-urlencoded");
+      /* http::Request request{"http://127.0.0.1:8000/api/robot/telemetry/" + msg_type}; */
 
-      // ROS_INFO_THROTTLE(1,body);
-      const auto response = request.send("PATCH", body, {
-          {"Content-Type", "application/x-www-form-urlencoded"}
-      });
-      std::cout << std::string{response.body.begin(), response.body.end()} << '\n'; // print the result
+      /* // ROS_INFO_THROTTLE(1,body); */
+      /* const auto response = request.send("PATCH", body, { */
+      /*     {"Content-Type", "application/x-www-form-urlencoded"} */
+      /* }); */
+    std::cout << res->status << ": " << res->body << '\n'; // print the result
   }
   catch (const std::exception& e)
   {
-      std::cerr << "Request failed, error: " << e.what() << '\n';
+    std::cerr << "Request failed, error: " << e.what() << '\n';
   }
 
 
