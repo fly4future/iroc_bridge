@@ -19,6 +19,7 @@
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
 #include <mrs_msgs/UavDiagnostics.h>
+#include <mrs_msgs/Path.h>
 
 //}
 
@@ -50,6 +51,8 @@ private:
   ros::ServiceClient sc_offboard_;
   ros::ServiceClient sc_land_;
 
+  ros::Publisher pub_path_;
+
   // | ----------------------- main timer ----------------------- |
 
   ros::Timer timer_main_;
@@ -62,6 +65,8 @@ private:
   void parseLocalPosition(const mrs_msgs::UavStatus::ConstPtr& uav_status);
   void parseGlobalPosition(const sensor_msgs::NavSatFix::ConstPtr& global_position);
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
+
+  void pathCallback(const httplib::Request&, httplib::Response& res);
 
   struct svc_call_res_t
   {
@@ -116,6 +121,10 @@ void IROCBridge::onInit() {
     ros::shutdown();
   }
 
+  // | ----------------------- publishers ----------------------- |
+
+  pub_path_ = nh_.advertise<mrs_msgs::Path>("path_out", 10);
+
   // | --------------------- service clients -------------------- |
 
   sc_arm_ = nh_.serviceClient<std_srvs::SetBool>("arm");
@@ -125,7 +134,7 @@ void IROCBridge::onInit() {
   http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
   //TODO: move this to separate methods to not clutter the initialization
-  http_srv_.Get("/takeoff", [&](const httplib::Request &, httplib::Response &res)
+  http_srv_.Get("/takeoff", [&](const httplib::Request&, httplib::Response& res)
       {
         ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
         // firstly, arm the vehicle
@@ -150,7 +159,7 @@ void IROCBridge::onInit() {
         res.set_content("Taking off.", "text/plain");
       });
 
-  http_srv_.Get("/land", [&](const httplib::Request &, httplib::Response &res)
+  http_srv_.Get("/land", [&](const httplib::Request&, httplib::Response& res)
       {
         ROS_INFO_STREAM_THROTTLE(1.0, "Calling land.");
         const auto resp = callService<std_srvs::Trigger>(sc_land_);
@@ -161,6 +170,9 @@ void IROCBridge::onInit() {
         }
         res.set_content("Landing.", "text/plain");
       });
+
+  const httplib::Server::Handler hdlr_set_path = std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post("/set_path", hdlr_set_path);
 
   th_http_srv_ = std::thread([&]()
       {
@@ -231,8 +243,8 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
 //}
 
 // | -------------------- support functions ------------------- |
-//
 
+/* parseRobotState() method //{ */
 void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot_diags)
 {
   ROS_INFO_STREAM_THROTTLE(1,"[IROCBridge]: Robot state: \"" << robot_diags->state << "\".");
@@ -242,6 +254,7 @@ void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot
   };
   sendJsonMessage("RobotState", json_msg);
 }
+//}
 
 /* parseLocalPosition() //{ */
 
@@ -330,9 +343,61 @@ IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, const
 
 //}
 
+void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& res)
+{
+  try
+  {
+    const auto json_path = json::parse(req.body);
+    if (!json_path.is_object() || !json_path.contains("frame_id") || !json_path.contains("points"))
+    {
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad path input: Expected an object with fields frame_id, points.");
+      return;
+    }
+
+    const auto json_points = json_path.at("points");
+    if (!json_points.is_array())
+    {
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+      return;
+    }
+
+    mrs_msgs::Path msg_path;
+    msg_path.points.reserve(json_points.size());
+    bool use_heading = false;
+    for (const auto& el : json_points)
+    {
+      if (!el.is_object() || !el.contains("x") || !el.contains("y") || !el.contains("z"))
+      {
+        ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad waypoint input: Expected an object with fields x, y, z, <heading>.");
+        return;
+      }
+      mrs_msgs::Reference ref;
+      ref.position.x = el.at("x");
+      ref.position.y = el.at("y");
+      ref.position.z = el.at("z");
+      if (el.contains("heading"))
+      {
+        ref.heading = el.at("heading");
+        use_heading = true;
+      }
+      msg_path.points.push_back(ref);
+    }
+    msg_path.header.stamp = ros::Time::now();
+    msg_path.header.frame_id = json_path.at("frame_id");
+    msg_path.fly_now = true;
+    msg_path.use_heading = use_heading;
+    pub_path_.publish(msg_path);
+    ROS_INFO_STREAM("[IROCBridge]: Set a path with " << json_points.size() << " length.");
+  }
+  catch (const json::exception& e)
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+  }
+}
+
+/* routine_death_check() method //{ */
 void IROCBridge::routine_death_check()
 {
-  ROS_INFO("[IROCBridge]: Death check routine running.");
   // to enable graceful exit, the server needs to be stopped
   const ros::WallDuration period(0.5);
   while (ros::ok())
@@ -342,6 +407,7 @@ void IROCBridge::routine_death_check()
   ROS_INFO("[IROCBridge]: Stopping the HTTP client.");
   http_client_->stop();
 }
+//}
 
 }  // namespace iroc_bridge
 

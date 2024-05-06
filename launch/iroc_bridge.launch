@@ -36,11 +36,15 @@
       <param if="$(eval not arg('custom_config') == '' and arg('custom_config')[0] == '/')" name="custom_config" value="$(arg custom_config)" />
       <param if="$(eval not arg('custom_config') == '' and not arg('custom_config')[0] == '/')" name="custom_config" value="$(env PWD)/$(arg custom_config)" />
 
+      <!-- Publishers -->
+      <remap from="~path_out" to="trajectory_generation/path" />
+
       <!-- Subscribers (note that the topic names will also be remapped using the namespace as a prefix) -->
       <remap from="~robot_diagnostics_in" to="state_monitor/diagnostics" />
       <remap from="~uav_status_in" to="mrs_uav_status/uav_status" />
       <remap from="~hw_api_gnss_in" to="hw_api/gnss" />
 
+      <!-- Services -->
       <remap from="~arm" to="hw_api/arming" />
       <remap from="~offboard" to="hw_api/offboard" />
       <remap from="~land" to="uav_manager/land" />
