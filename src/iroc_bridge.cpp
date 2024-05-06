@@ -343,38 +343,68 @@ IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, const
 
 //}
 
+bool parse_vars_impl(const json& js)
+{
+  return true;
+}
+
+template <typename Type1, typename ... Types>
+bool parse_vars_impl(const json& js, const std::string& name1, Type1& arg1, Types ... args)
+{
+  if (!js.contains(name1))
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "JSON doesn't have the expected member \"" << name1 << "\".");
+    return false && parse_vars_impl(js, args...);
+  }
+
+  try
+  {
+    arg1 = js.at(name1);
+    return parse_vars_impl(js, args...);
+  }
+  catch (json::exception& e)
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "Cannot parse member \"" << name1 << "\" as \"" << typeid(Type1).name() << "\" (is of type \"" << js.at(name1).type_name() << "\").");
+    return false && parse_vars_impl(js, args...);
+  }
+}
+
+template <typename ... Types>
+bool parse_vars(const json& js, Types ... args)
+{
+  return parse_vars_impl(js, args...);
+}
+
 void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& res)
 {
   try
   {
     const auto json_path = json::parse(req.body);
-    if (!json_path.is_object() || !json_path.contains("frame_id") || !json_path.contains("points"))
-    {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad path input: Expected an object with fields frame_id, points.");
+    std::string frame_id;
+    json points;
+    const auto succ = parse_vars(json_path, "frame_id", frame_id, "points", points);
+    if (!succ)
       return;
-    }
 
-    const auto json_points = json_path.at("points");
-    if (!json_points.is_array())
+    if (!points.is_array())
     {
       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
       return;
     }
 
     mrs_msgs::Path msg_path;
-    msg_path.points.reserve(json_points.size());
+    msg_path.points.reserve(points.size());
     bool use_heading = false;
-    for (const auto& el : json_points)
+    for (const auto& el : points)
     {
-      if (!el.is_object() || !el.contains("x") || !el.contains("y") || !el.contains("z"))
-      {
-        ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad waypoint input: Expected an object with fields x, y, z, <heading>.");
-        return;
-      }
       mrs_msgs::Reference ref;
       ref.position.x = el.at("x");
       ref.position.y = el.at("y");
       ref.position.z = el.at("z");
+      const auto succ = parse_vars(el, "x", ref.position.x, "y", ref.position.y, "z", ref.position.z);
+      if (!succ)
+        return;
+
       if (el.contains("heading"))
       {
         ref.heading = el.at("heading");
@@ -383,11 +413,11 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
       msg_path.points.push_back(ref);
     }
     msg_path.header.stamp = ros::Time::now();
-    msg_path.header.frame_id = json_path.at("frame_id");
+    msg_path.header.frame_id = frame_id;
     msg_path.fly_now = true;
     msg_path.use_heading = use_heading;
     pub_path_.publish(msg_path);
-    ROS_INFO_STREAM("[IROCBridge]: Set a path with " << json_points.size() << " length.");
+    ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
   }
   catch (const json::exception& e)
   {
