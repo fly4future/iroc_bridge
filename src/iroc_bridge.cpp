@@ -1,6 +1,7 @@
 /* includes //{ */
 
-/* each ros package must have these */
+#include <string.h>
+
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
 
@@ -12,13 +13,14 @@
 #include <httplib/httplib.h>
 
 #include <sensor_msgs/NavSatFix.h>
+#include <std_srvs/SetBool.h>
+#include <std_srvs/Trigger.h>
 
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
-#include <string.h>
 
 //}
-using std::string;
+
 namespace iroc_bridge
 {
 
@@ -36,12 +38,16 @@ private:
 
   ros::Time last_update_time_;
 
-  std::unique_ptr<httplib::Client> http_client_;
+  std::thread th_http_srv_;
   httplib::Server http_srv_;
+  std::unique_ptr<httplib::Client> http_client_;
 
   // | ---------------------- ROS subscribers --------------------- |
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
   mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
+
+  ros::ServiceClient sc_arm_;
+  ros::ServiceClient sc_offboard_;
 
   // | ----------------------- main timer ----------------------- |
 
@@ -51,9 +57,26 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseLocalPosition(const mrs_msgs::UavStatusConstPtr &uav_status);
-  void parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr &global_position);
-  void sendJsonMessage(const std::string &msg_type, const json &json_msg);
+  void parseLocalPosition(const mrs_msgs::UavStatusConstPtr& uav_status);
+  void parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr& global_position);
+  void sendJsonMessage(const std::string& msg_type, const json& json_msg);
+
+  struct svc_call_res_t
+  {
+    bool call_success;
+    std::string message;
+  };
+
+  template <typename Svc_T>
+  svc_call_res_t callService(ros::ServiceClient& sc, typename Svc_T::Request req);
+
+  template <typename Svc_T>
+  svc_call_res_t callService(ros::ServiceClient& sc);
+
+  svc_call_res_t callService(ros::ServiceClient& sc, const bool val);
+
+  std::thread th_death_check_;
+  void routine_death_check();
 };
 //}
 
@@ -82,21 +105,52 @@ void IROCBridge::onInit() {
 
   param_loader.addYamlFileFromParam("config");
 
-  param_loader.loadParam("main_timer_rate", _main_timer_rate_);
+  const auto main_timer_rate = param_loader.loadParam2<double>("main_timer_rate");
+  const auto url = param_loader.loadParam2<std::string>("url");
+  const auto client_port = param_loader.loadParam2<int>("client_port");
+  const auto server_port = param_loader.loadParam2<int>("server_port");
 
-  if (!param_loader.loadedSuccessfully()) {
+  if (!param_loader.loadedSuccessfully())
+  {
     ROS_ERROR("[IROCBridge]: Could not load all parameters!");
     ros::shutdown();
   }
 
-  http_client_ = std::make_unique<httplib::Client>("http://127.0.0.1:8000");
+  http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
-  http_srv_.Get("/takeoff", [](const httplib::Request &, httplib::Response &res)
+  sc_arm_ = nh_.serviceClient<std_srvs::SetBool>("arm");
+  sc_offboard_ = nh_.serviceClient<std_srvs::Trigger>("offboard");
+
+  http_srv_.Get("/takeoff", [&](const httplib::Request &, httplib::Response &res)
       {
-        res.set_content("TBD", "text/plain");
+        ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
+        // firstly, arm the vehicle
+        {
+          const auto resp = callService(sc_arm_, true);
+          if (!resp.call_success)
+          {
+            res.set_content(resp.message, "text/plain");
+            return;
+          }
+        }
+
+        // then, switch to offboard
+        {
+          const auto resp = callService<std_srvs::Trigger>(sc_offboard_);
+          if (!resp.call_success)
+          {
+            res.set_content(resp.message, "text/plain");
+            return;
+          }
+        }
+        res.set_content("Taking off.", "text/plain");
       });
 
-  http_srv_.listen("127.0.0.1", 8080);
+  th_http_srv_ = std::thread([&]()
+      {
+        http_srv_.listen(url, server_port);
+      });
+  th_http_srv_.detach();
 
   // | ----------------------- subscribers ---------------------- |
 
@@ -114,7 +168,9 @@ void IROCBridge::onInit() {
 
   // | ------------------------- timers ------------------------- |
 
-  timer_main_ = nh_.createTimer(ros::Rate(_main_timer_rate_), &IROCBridge::timerMain, this);
+  timer_main_ = nh_.createTimer(ros::Rate(main_timer_rate), &IROCBridge::timerMain, this);
+  th_death_check_ = std::thread(&IROCBridge::routine_death_check, this);
+  th_death_check_.detach();
 
   // | --------------------- finish the init -------------------- |
 
@@ -203,38 +259,70 @@ void IROCBridge::parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr &globa
 
 /* sendJsonMessage() //{ */
 
-void IROCBridge::sendJsonMessage(const std::string &msg_type, const json &json_msg) {
-  // Fill calls for restAPI
-  // TODO: Add communication with restAPI
-  /* const int print_indent = 2; */
-  /* ROS_INFO("[IROCBridge]: sending \"%s\" msg: \n%s", msg_type.c_str(), json_msg.dump(print_indent).c_str()); */
+void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_msg)
+{
+  const std::string url = "api/robot/telemetry/" + msg_type;
+  const std::string body = json_msg.dump();
+  const std::string content_type = "application/x-www-form-urlencoded";
+  const auto res = http_client_->Patch(url, body, content_type);
   
-
-  try
-  {
-    const string body = json_msg.dump();
-    const auto res = http_client_->Patch("api/robot/telemetry/" + msg_type, body, "application/x-www-form-urlencoded");
-      /* http::Request request{"http://127.0.0.1:8000/api/robot/telemetry/" + msg_type}; */
-
-      /* // ROS_INFO_THROTTLE(1,body); */
-      /* const auto response = request.send("PATCH", body, { */
-      /*     {"Content-Type", "application/x-www-form-urlencoded"} */
-      /* }); */
-    std::cout << res->status << ": " << res->body << '\n'; // print the result
-  }
-  catch (const std::exception& e)
-  {
-    std::cerr << "Request failed, error: " << e.what() << '\n';
-  }
-
+  if (res)
+    ROS_INFO_STREAM_THROTTLE(1.0, res->status << ": " << res->body);
+  else
+    ROS_WARN_STREAM_THROTTLE(1.0, "Failed to send PATCH request: " << to_string(res.error()));
 
   return;
 }
 
 //}
 
+/* callService() //{ */
+
+template <typename Svc_T>
+IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, typename Svc_T::Request req)
+{
+  typename Svc_T::Response res;
+  if (sc.call(req, res))
+  {
+    ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc_arm_.getService() << "\" with response \"" << res.message << "\".");
+    return {true, res.message};
+  }
+  else
+  {
+    const std::string msg = "Failed to call service \"" + sc.getService() + "\".";
+    ROS_WARN_STREAM_THROTTLE(1.0, msg);
+    return {false, msg};
+  }
+}
+
+template <typename Svc_T>
+IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc)
+{
+  return callService<Svc_T>(sc, {});
+}
+
+IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, const bool val)
+{
+  using svc_t = std_srvs::SetBool;
+  svc_t::Request req;
+  req.data = val;
+  return callService<svc_t>(sc, req);
+}
+
 //}
 
+void IROCBridge::routine_death_check()
+{
+  ROS_INFO("[IROCBridge]: Death check routine running.");
+  // to enable graceful exit, the server needs to be stopped
+  const ros::WallDuration period(0.5);
+  while (ros::ok())
+    period.sleep();
+  ROS_INFO("[IROCBridge]: Stopping the HTTP server.");
+  http_srv_.stop();
+  ROS_INFO("[IROCBridge]: Stopping the HTTP client.");
+  http_client_->stop();
+}
 
 }  // namespace iroc_bridge
 
