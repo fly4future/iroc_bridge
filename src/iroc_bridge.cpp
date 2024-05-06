@@ -18,6 +18,7 @@
 
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
+#include <mrs_msgs/UavDiagnostics.h>
 
 //}
 
@@ -36,18 +37,18 @@ private:
   ros::NodeHandle   nh_;
   std::atomic<bool> is_initialized_ = false;
 
-  ros::Time last_update_time_;
-
   std::thread th_http_srv_;
   httplib::Server http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
 
   // | ---------------------- ROS subscribers --------------------- |
+  mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics> sh_robot_diags_;
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
   mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
 
   ros::ServiceClient sc_arm_;
   ros::ServiceClient sc_offboard_;
+  ros::ServiceClient sc_land_;
 
   // | ----------------------- main timer ----------------------- |
 
@@ -57,8 +58,9 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseLocalPosition(const mrs_msgs::UavStatusConstPtr& uav_status);
-  void parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr& global_position);
+  void parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& uav_status);
+  void parseLocalPosition(const mrs_msgs::UavStatus::ConstPtr& uav_status);
+  void parseGlobalPosition(const sensor_msgs::NavSatFix::ConstPtr& global_position);
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
   struct svc_call_res_t
@@ -90,8 +92,6 @@ void IROCBridge::onInit() {
   /* waits for the ROS to publish clock */
   ros::Time::waitForValid();
   
-  last_update_time_ = ros::Time(0);
-
   /* load parameters */
   mrs_lib::ParamLoader param_loader(nh_, "IROCBridge");
 
@@ -116,11 +116,15 @@ void IROCBridge::onInit() {
     ros::shutdown();
   }
 
-  http_client_ = std::make_unique<httplib::Client>(url, client_port);
+  // | --------------------- service clients -------------------- |
 
   sc_arm_ = nh_.serviceClient<std_srvs::SetBool>("arm");
   sc_offboard_ = nh_.serviceClient<std_srvs::Trigger>("offboard");
+  sc_land_ = nh_.serviceClient<std_srvs::Trigger>("land");
 
+  http_client_ = std::make_unique<httplib::Client>(url, client_port);
+
+  //TODO: move this to separate methods to not clutter the initialization
   http_srv_.Get("/takeoff", [&](const httplib::Request &, httplib::Response &res)
       {
         ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
@@ -146,6 +150,18 @@ void IROCBridge::onInit() {
         res.set_content("Taking off.", "text/plain");
       });
 
+  http_srv_.Get("/land", [&](const httplib::Request &, httplib::Response &res)
+      {
+        ROS_INFO_STREAM_THROTTLE(1.0, "Calling land.");
+        const auto resp = callService<std_srvs::Trigger>(sc_land_);
+        if (!resp.call_success)
+        {
+          res.set_content(resp.message, "text/plain");
+          return;
+        }
+        res.set_content("Landing.", "text/plain");
+      });
+
   th_http_srv_ = std::thread([&]()
       {
         http_srv_.listen(url, server_port);
@@ -163,6 +179,7 @@ void IROCBridge::onInit() {
   shopts.queue_size         = 10;
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
+  sh_robot_diags_ = mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics>(shopts, "robot_diagnostics_in");
   sh_uav_status_ = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
   sh_hw_api_gnss_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "hw_api_gnss_in");
 
@@ -189,41 +206,43 @@ void IROCBridge::onInit() {
 
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
 
-  if (!is_initialized_) {
+  if (!is_initialized_)
     return;
+
+  if (sh_robot_diags_.newMsg())
+  {
+    const auto robot_diags = sh_robot_diags_.getMsg();
+    parseRobotState(robot_diags);
   }
 
-  bool got_uav_status = sh_uav_status_.newMsg();
-  bool got_hw_api_gnss = sh_hw_api_gnss_.newMsg();
-  ros::Time time_now = ros::Time::now();
-
-  if (!got_uav_status && !got_hw_api_gnss) {
-    ros::Duration last_message_diff = time_now - last_update_time_;
-    if(last_message_diff > ros::Duration(5.0)){
-      ROS_WARN_THROTTLE(5.0, "[IROCBridge]: waiting for ROS data");
-    }
-    return;
-  }
-
-
-  if (got_uav_status){
-    auto uav_status = sh_uav_status_.getMsg();
+  if (sh_uav_status_.newMsg())
+  {
+    const auto uav_status = sh_uav_status_.getMsg();
     parseLocalPosition(uav_status);
   }
 
-  if (got_hw_api_gnss){
-    auto hw_api_gnss = sh_hw_api_gnss_.getMsg();
+  if (sh_hw_api_gnss_.newMsg())
+  {
+    const auto hw_api_gnss = sh_hw_api_gnss_.getMsg();
     parseGlobalPosition(hw_api_gnss);
   }
-  
-  /* TODO: add more messages types */
-  last_update_time_ = time_now;
 }
 
 //}
 
 // | -------------------- support functions ------------------- |
 //
+
+void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot_diags)
+{
+  ROS_INFO_STREAM_THROTTLE(1,"[IROCBridge]: Robot state: \"" << robot_diags->state << "\".");
+
+  const json json_msg = {
+      {"state", robot_diags->state},
+  };
+  sendJsonMessage("RobotState", json_msg);
+}
+
 /* parseLocalPosition() //{ */
 
 void IROCBridge::parseLocalPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
