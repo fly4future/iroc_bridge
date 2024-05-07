@@ -3,6 +3,7 @@ project(iroc_bridge)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_definitions(-O0)
 
 set(CATKIN_DEPENDENCIES
   cmake_modules
@@ -36,6 +37,7 @@ include_directories(
 ## Declare a C++ library
 add_library(IROCBridge
   src/iroc_bridge.cpp
+  src/json_var_parser.cpp
   )
 
 add_dependencies(IROCBridge

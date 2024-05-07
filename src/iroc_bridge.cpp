@@ -1,6 +1,6 @@
 /* includes //{ */
 
-#include <string.h>
+#include <string>
 
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
@@ -20,6 +20,8 @@
 #include <mrs_msgs/UavStatus.h>
 #include <mrs_msgs/UavDiagnostics.h>
 #include <mrs_msgs/Path.h>
+
+#include "iroc_bridge/json_var_parser.h"
 
 //}
 
@@ -343,84 +345,58 @@ IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, const
 
 //}
 
-bool parse_vars_impl(const json& js)
-{
-  return true;
-}
-
-template <typename Type1, typename ... Types>
-bool parse_vars_impl(const json& js, const std::string& name1, Type1* arg1, Types ... args)
-{
-  if (!js.contains(name1))
-  {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "JSON doesn't have the expected member \"" << name1 << "\".");
-    return false && parse_vars_impl(js, args...);
-  }
-
-  try
-  {
-    *arg1 = js.at(name1);
-    return parse_vars_impl(js, args...);
-  }
-  catch (json::exception& e)
-  {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "Cannot parse member \"" << name1 << "\" as \"" << typeid(Type1).name() << "\" (is of type \"" << js.at(name1).type_name() << "\").");
-    return false && parse_vars_impl(js, args...);
-  }
-}
-
-template <typename ... Types>
-bool parse_vars(const json& js, Types ... args)
-{
-  return parse_vars_impl(js, args...);
-}
-
+/* pathCallback() method //{ */
 void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& res)
 {
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a path message JSON -> ROS.");
+  json json_msg;
   try
   {
-    const auto json_path = json::parse(req.body);
-    std::string frame_id;
-    json points;
-    const auto succ = parse_vars(json_path, "frame_id", &frame_id, "points", &points);
-    if (!succ)
-      return;
-
-    if (!points.is_array())
-    {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
-      return;
-    }
-
-    mrs_msgs::Path msg_path;
-    msg_path.points.reserve(points.size());
-    bool use_heading = false;
-    for (const auto& el : points)
-    {
-      mrs_msgs::Reference ref;
-      const auto succ = parse_vars(el, "x", &ref.position.x, "y", &ref.position.y, "z", &ref.position.z);
-      if (!succ)
-        return;
-
-      if (el.contains("heading"))
-      {
-        ref.heading = el.at("heading");
-        use_heading = true;
-      }
-      msg_path.points.push_back(ref);
-    }
-    msg_path.header.stamp = ros::Time::now();
-    msg_path.header.frame_id = frame_id;
-    msg_path.fly_now = true;
-    msg_path.use_heading = use_heading;
-    pub_path_.publish(msg_path);
-    ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
+    json_msg = json::parse(req.body);
   }
   catch (const json::exception& e)
   {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
   }
+
+  std::string frame_id;
+  json points;
+  const auto succ = parse_vars(json_msg, {{"frame_id", &frame_id}, {"points", &points}});
+  if (!succ)
+    return;
+
+  if (!points.is_array())
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    return;
+  }
+
+  mrs_msgs::Path msg_path;
+  msg_path.points.reserve(points.size());
+  bool use_heading = false;
+  for (const auto& el : points)
+  {
+    mrs_msgs::Reference ref;
+    const auto succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}});
+    if (!succ)
+      return;
+
+    if (el.contains("heading"))
+    {
+      ref.heading = el.at("heading");
+      use_heading = true;
+    }
+    msg_path.points.push_back(ref);
+  }
+  msg_path.header.stamp = ros::Time::now();
+  msg_path.header.frame_id = frame_id;
+  msg_path.fly_now = true;
+  msg_path.use_heading = use_heading;
+  pub_path_.publish(msg_path);
+  ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
 }
+//}
 
 /* routine_death_check() method //{ */
 void IROCBridge::routine_death_check()
