@@ -349,7 +349,7 @@ bool parse_vars_impl(const json& js)
 }
 
 template <typename Type1, typename ... Types>
-bool parse_vars_impl(const json& js, const std::string& name1, Type1& arg1, Types ... args)
+bool parse_vars_impl(const json& js, const std::string& name1, Type1* arg1, Types ... args)
 {
   if (!js.contains(name1))
   {
@@ -359,7 +359,7 @@ bool parse_vars_impl(const json& js, const std::string& name1, Type1& arg1, Type
 
   try
   {
-    arg1 = js.at(name1);
+    *arg1 = js.at(name1);
     return parse_vars_impl(js, args...);
   }
   catch (json::exception& e)
@@ -382,7 +382,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
     const auto json_path = json::parse(req.body);
     std::string frame_id;
     json points;
-    const auto succ = parse_vars(json_path, "frame_id", frame_id, "points", points);
+    const auto succ = parse_vars(json_path, "frame_id", &frame_id, "points", &points);
     if (!succ)
       return;
 
@@ -398,10 +398,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
     for (const auto& el : points)
     {
       mrs_msgs::Reference ref;
-      ref.position.x = el.at("x");
-      ref.position.y = el.at("y");
-      ref.position.z = el.at("z");
-      const auto succ = parse_vars(el, "x", ref.position.x, "y", ref.position.y, "z", ref.position.z);
+      const auto succ = parse_vars(el, "x", &ref.position.x, "y", &ref.position.y, "z", &ref.position.z);
       if (!succ)
         return;
 
