@@ -24,7 +24,6 @@ windows:
       layout: tiled
       panes:
         - waitForHw; roslaunch mrs_uav_autostart automatic_start.launch custom_config:=./config/automatic_start.yaml
-        - waitForControl; rosservice call /$UAV_NAME/hw_api/arming 1; sleep 2; rosservice call /$UAV_NAME/hw_api/offboard
   - status:
       layout: tiled
       panes:
@@ -37,6 +36,10 @@ windows:
           custom_config:=./config/custom_config.yaml
           world_config:=./config/world_config.yaml
           network_config:=./config/network_config.yaml
+  - robot_diagnostics:
+      layout: tiled
+      panes:
+        - waitForHw; roslaunch mrs_robot_diagnostics state_monitor.launch
   - iroc_bridge:
       layout: tiled
       panes:
