@@ -43,7 +43,7 @@ windows:
   - iroc_bridge:
       layout: tiled
       panes:
-        - waitForHw; export NS_NAME=$UAV_NAME; roslaunch iroc_bridge iroc_bridge.launch
+        - waitForHw; export ROBOT_NAME=$UAV_NAME; export ROBOT_TYPE=$UAV_TYPE; roslaunch iroc_bridge iroc_bridge.launch
   - rviz:
       layout: tiled
       panes:

@@ -12,13 +12,19 @@
 #include <nlohmann/json.hpp>
 #include <httplib/httplib.h>
 
+#include <sensor_msgs/BatteryState.h>
 #include <sensor_msgs/NavSatFix.h>
+#include <std_msgs/Float64.h>
+
 #include <std_srvs/SetBool.h>
 #include <std_srvs/Trigger.h>
 
 /* custom msgs of MRS group */
 #include <mrs_msgs/UavStatus.h>
 #include <mrs_msgs/UavDiagnostics.h>
+#include <mrs_msgs/Float64Stamped.h>
+#include <mrs_msgs/EstimationDiagnostics.h>
+#include <mrs_msgs/ControlManagerDiagnostics.h>
 #include <mrs_msgs/Path.h>
 
 #include "iroc_bridge/json_var_parser.h"
@@ -30,24 +36,39 @@ namespace iroc_bridge
 
 using json = nlohmann::json;
 
+using vec3_t = Eigen::Vector3d;
+using vec4_t = Eigen::Vector4d;
+
 /* class IROCBridge //{ */
 
-class IROCBridge : public nodelet::Nodelet {
+class IROCBridge : public nodelet::Nodelet
+{
 public:
   virtual void onInit();
 
 private:
   ros::NodeHandle   nh_;
-  std::atomic<bool> is_initialized_ = false;
 
   std::thread th_http_srv_;
   httplib::Server http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
 
+  std::string _robot_name_;
+  std::string _robot_type_;
+
   // | ---------------------- ROS subscribers --------------------- |
   mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics> sh_robot_diags_;
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
+
+  mrs_lib::SubscribeHandler<sensor_msgs::BatteryState> sh_battery_state_;
+
+  mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics> sh_estimation_diagnostics_;
   mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
+  mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped> sh_control_manager_heading_;
+  mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped> sh_hw_api_mag_heading_;
+
+  mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics> sh_control_manager_diagnostics_;
+  mrs_lib::SubscribeHandler<std_msgs::Float64> sh_control_manager_thrust;
 
   ros::ServiceClient sc_arm_;
   ros::ServiceClient sc_offboard_;
@@ -59,13 +80,13 @@ private:
 
   ros::Timer timer_main_;
   void       timerMain(const ros::TimerEvent &event);
-  double     _main_timer_rate_;
 
   // | ------------------ Additional functions ------------------ |
 
   void parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& uav_status);
-  void parseLocalPosition(const mrs_msgs::UavStatus::ConstPtr& uav_status);
-  void parseGlobalPosition(const sensor_msgs::NavSatFix::ConstPtr& global_position);
+  void parseRobotInfo(const sensor_msgs::BatteryState::ConstPtr& battery_state);
+  void parseStateEstimationInfo(const mrs_msgs::EstimationDiagnostics::ConstPtr& estimation_diagnostics, const mrs_msgs::Float64Stamped::ConstPtr& local_heading, const sensor_msgs::NavSatFix::ConstPtr& global_position, const mrs_msgs::Float64Stamped::ConstPtr& global_heading);
+  void parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust);
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
@@ -112,7 +133,11 @@ void IROCBridge::onInit() {
 
   param_loader.addYamlFileFromParam("config");
 
+  param_loader.loadParam("robot_name", _robot_name_);
+  param_loader.loadParam("robot_type", _robot_type_);
   const auto main_timer_rate = param_loader.loadParam2<double>("main_timer_rate");
+  const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("no_message_timeout");
+
   const auto url = param_loader.loadParam2<std::string>("url");
   const auto client_port = param_loader.loadParam2<int>("client_port");
   const auto server_port = param_loader.loadParam2<int>("server_port");
@@ -187,7 +212,7 @@ void IROCBridge::onInit() {
   mrs_lib::SubscribeHandlerOptions shopts;
   shopts.nh                 = nh_;
   shopts.node_name          = "IROCBridge";
-  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.no_message_timeout = no_message_timeout;
   shopts.threadsafe         = true;
   shopts.autostart          = true;
   shopts.queue_size         = 10;
@@ -195,7 +220,18 @@ void IROCBridge::onInit() {
 
   sh_robot_diags_ = mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics>(shopts, "robot_diagnostics_in");
   sh_uav_status_ = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
+
+  // | ------------------------ RobotInfo ----------------------- |
+  sh_battery_state_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "battery_state_in");
+
+  // | ------------------- StateEstimationInfo ------------------ |
+  sh_estimation_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics>(shopts, "estimation_diagnostics_in");
   sh_hw_api_gnss_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "hw_api_gnss_in");
+  sh_control_manager_heading_ = mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped>(shopts, "control_manager_heading_in");
+  sh_hw_api_mag_heading_ = mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped>(shopts, "hw_api_mag_heading_in");
+
+  sh_control_manager_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics>(shopts, "control_manager_diagnostics_in");
+  sh_control_manager_thrust = mrs_lib::SubscribeHandler<std_msgs::Float64>(shopts, "control_manager_thrust_in");
 
   // | ------------------------- timers ------------------------- |
 
@@ -207,7 +243,6 @@ void IROCBridge::onInit() {
 
   ROS_INFO("[IROCBridge]: initialized");
   ROS_INFO("[IROCBridge]: --------------------");
-  is_initialized_ = true;
 }
 
 //}
@@ -218,28 +253,20 @@ void IROCBridge::onInit() {
 
 /* timerMain() //{ */
 
-void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event) {
-
-  if (!is_initialized_)
-    return;
+void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
+{
 
   if (sh_robot_diags_.newMsg())
-  {
-    const auto robot_diags = sh_robot_diags_.getMsg();
-    parseRobotState(robot_diags);
-  }
+    parseRobotState(sh_robot_diags_.getMsg());
 
-  if (sh_uav_status_.newMsg())
-  {
-    const auto uav_status = sh_uav_status_.getMsg();
-    parseLocalPosition(uav_status);
-  }
+  if (sh_battery_state_.newMsg())
+    parseRobotInfo(sh_battery_state_.getMsg());
 
-  if (sh_hw_api_gnss_.newMsg())
-  {
-    const auto hw_api_gnss = sh_hw_api_gnss_.getMsg();
-    parseGlobalPosition(hw_api_gnss);
-  }
+  if (sh_estimation_diagnostics_.newMsg() && sh_control_manager_heading_.newMsg() && sh_hw_api_gnss_.newMsg() && sh_hw_api_mag_heading_.newMsg())
+    parseStateEstimationInfo(sh_estimation_diagnostics_.getMsg(), sh_control_manager_heading_.getMsg(), sh_hw_api_gnss_.getMsg(), sh_hw_api_mag_heading_.getMsg());
+
+  if (sh_control_manager_diagnostics_.newMsg() && sh_control_manager_thrust.newMsg())
+    parseControlInfo(sh_control_manager_diagnostics_.getMsg(), sh_control_manager_thrust.getMsg());
 }
 
 //}
@@ -258,35 +285,92 @@ void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot
 }
 //}
 
-/* parseLocalPosition() //{ */
+/* parseRobotInfo() //{ */
 
-void IROCBridge::parseLocalPosition(const mrs_msgs::UavStatusConstPtr &uav_status) {
-  ROS_INFO_THROTTLE(1,"[IROCBridge]: LocalPosition: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", 
-      uav_status->odom_x, uav_status->odom_y, uav_status->odom_z, uav_status->odom_hdg);
-
-  const json json_msg = {
-      {"x", uav_status->odom_x},
-      {"y", uav_status->odom_y},
-      {"z", uav_status->odom_z},
-      {"heading", uav_status->odom_hdg},
+void IROCBridge::parseRobotInfo(const sensor_msgs::BatteryState::ConstPtr& battery_state)
+{
+  const json json_msg =
+  {
+    {"robot_name", _robot_name_},
+    {"robot_type", _robot_type_},
+    {"battery_state",
+      {"voltage", battery_state->voltage},
+      {"percentage", battery_state->percentage},
+      {"wh_drained", "NOT_IMPLEMENTED"},
+    },
+    {"ready_to_start", "NOT_IMPLEMENTED"},
+    {"problems", "NOT_IMPLEMENTED"},
   };
-  sendJsonMessage("LocalPosition", json_msg);
+  sendJsonMessage("RobotInfo", json_msg);
 }
 
 //}
 
-/* parseGlobalPosition() //{ */
+/* parseStateEstimationInfo() //{ */
 
-void IROCBridge::parseGlobalPosition(const sensor_msgs::NavSatFixConstPtr &global_position) {
-  ROS_INFO_THROTTLE(1,"[IROCBridge]: GlobalPosition: lat: %.2f, lon: %.2f, alt: %.2f", 
-      global_position->latitude, global_position->longitude, global_position->altitude);
-
-  const json json_msg = {
+void IROCBridge::parseStateEstimationInfo(const mrs_msgs::EstimationDiagnostics::ConstPtr& estimation_diagnostics, const mrs_msgs::Float64Stamped::ConstPtr& local_heading, const sensor_msgs::NavSatFix::ConstPtr& global_position, const mrs_msgs::Float64Stamped::ConstPtr& global_heading)
+{
+  const json json_msg =
+  {
+    {"estimation_frame", estimation_diagnostics->header.frame_id},
+    {"local_pose",
+      {"x", estimation_diagnostics->pose.position.x},
+      {"y", estimation_diagnostics->pose.position.y},
+      {"z", estimation_diagnostics->pose.position.z},
+      {"heading", local_heading->value},
+    },
+    {"global_pose",
       {"latitude", global_position->latitude},
       {"longitude", global_position->longitude},
       {"altitude", global_position->altitude},
+      {"heading", global_heading->value},
+    },
+    {"above_ground_level_height", estimation_diagnostics->agl_height},
+    {"velocity",
+      {"linear",
+        {"x", estimation_diagnostics->velocity.linear.x},
+        {"y", estimation_diagnostics->velocity.linear.y},
+        {"z", estimation_diagnostics->velocity.linear.z},
+      },
+      {"angular",
+        {"x", estimation_diagnostics->velocity.angular.x},
+        {"y", estimation_diagnostics->velocity.angular.y},
+        {"z", estimation_diagnostics->velocity.angular.z},
+      },
+    },
+    {"acceleration",
+      {"linear",
+        {"x", estimation_diagnostics->acceleration.linear.x},
+        {"y", estimation_diagnostics->acceleration.linear.y},
+        {"z", estimation_diagnostics->acceleration.linear.z},
+      },
+      {"angular",
+        {"x", estimation_diagnostics->acceleration.angular.x},
+        {"y", estimation_diagnostics->acceleration.angular.y},
+        {"z", estimation_diagnostics->acceleration.angular.z},
+      },
+    },
+    {"running_estimators", estimation_diagnostics->running_state_estimators},
+    {"switchable_estimators", estimation_diagnostics->switchable_state_estimators},
   };
-  sendJsonMessage("GlobalPosition", json_msg);
+  sendJsonMessage("StateEstimationInfo", json_msg);
+}
+
+//}
+
+/* parseControlInfo() //{ */
+
+void IROCBridge::parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust)
+{
+  const json json_msg =
+  {
+    {"active_controller", control_manager_diagnostics->active_controller},
+    {"available_controllers", control_manager_diagnostics->available_controllers},
+    {"active_tracker", control_manager_diagnostics->active_tracker},
+    {"available_trackers", control_manager_diagnostics->available_trackers},
+    {"thrust", thrust->data},
+  };
+  sendJsonMessage("ControlInfo", json_msg);
 }
 
 //}
