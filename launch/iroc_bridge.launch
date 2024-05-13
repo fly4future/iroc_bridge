@@ -40,14 +40,12 @@
       <remap from="~path_out" to="trajectory_generation/path" />
 
       <!-- Subscribers (note that the topic names will also be remapped using the namespace as a prefix) -->
-      <remap from="~robot_diagnostics_in" to="state_monitor/diagnostics" />
-      <remap from="~uav_status_in" to="mrs_uav_status/uav_status" />
 
       <remap from="~in/general_robot_info" to="state_monitor/general_robot_info" />
       <remap from="~in/state_estimation_info" to="state_monitor/state_estimation_info" />
-
-      <remap from="~control_manager_diagnostics_in" to="control_manager/diagnostics" />
-      <remap from="~control_manager_thrust_in" to="control_manager/thrust" />
+      <remap from="~in/control_info" to="state_monitor/control_info" />
+      <remap from="~in/collision_avoidance_info" to="state_monitor/collision_avoidance_info" />
+      <remap from="~in/uav_info" to="state_monitor/uav_info" />
 
       <!-- Services -->
       <remap from="~arm" to="hw_api/arming" />

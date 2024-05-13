@@ -20,15 +20,13 @@
 #include <std_srvs/Trigger.h>
 
 /* custom msgs of MRS group */
-#include <mrs_msgs/UavStatus.h>
-#include <mrs_msgs/UavDiagnostics.h>
-#include <mrs_msgs/Float64Stamped.h>
-#include <mrs_msgs/EstimationDiagnostics.h>
-#include <mrs_msgs/ControlManagerDiagnostics.h>
 #include <mrs_msgs/Path.h>
 
 #include <mrs_robot_diagnostics/GeneralRobotInfo.h>
 #include <mrs_robot_diagnostics/StateEstimationInfo.h>
+#include <mrs_robot_diagnostics/ControlInfo.h>
+#include <mrs_robot_diagnostics/CollisionAvoidanceInfo.h>
+#include <mrs_robot_diagnostics/UavInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
 
@@ -57,14 +55,12 @@ private:
   std::unique_ptr<httplib::Client> http_client_;
 
   // | ---------------------- ROS subscribers --------------------- |
-  mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics> sh_robot_diags_;
-  mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
 
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo> sh_general_robot_info_;
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo> sh_state_estimation_info_;
-
-  mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics> sh_control_manager_diagnostics_;
-  mrs_lib::SubscribeHandler<std_msgs::Float64> sh_control_manager_thrust;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo> sh_control_info_;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo> sh_collision_avoidance_info_;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo> sh_uav_info_;
 
   ros::ServiceClient sc_arm_;
   ros::ServiceClient sc_offboard_;
@@ -79,10 +75,12 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& uav_status);
   void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info);
   void parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info);
-  void parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust);
+  void parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info);
+  void parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info);
+  void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info);
+
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
@@ -212,17 +210,11 @@ void IROCBridge::onInit() {
   shopts.queue_size         = 10;
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
-  sh_robot_diags_ = mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics>(shopts, "robot_diagnostics_in");
-  sh_uav_status_ = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
-
-  // | ------------------------ RobotInfo ----------------------- |
   sh_general_robot_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, "in/general_robot_info");
-
-  // | ------------------- StateEstimationInfo ------------------ |
   sh_state_estimation_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, "in/state_estimation_info");
-
-  sh_control_manager_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics>(shopts, "control_manager_diagnostics_in");
-  sh_control_manager_thrust = mrs_lib::SubscribeHandler<std_msgs::Float64>(shopts, "control_manager_thrust_in");
+  sh_control_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, "in/control_info");
+  sh_collision_avoidance_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, "in/collision_avoidance_info");
+  sh_uav_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, "in/uav_info");
 
   // | ------------------------- timers ------------------------- |
 
@@ -246,35 +238,25 @@ void IROCBridge::onInit() {
 
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
 {
-
-  if (sh_robot_diags_.newMsg())
-    parseRobotState(sh_robot_diags_.getMsg());
-
   if (sh_general_robot_info_.newMsg())
     parseGeneralRobotInfo(sh_general_robot_info_.getMsg());
 
   if (sh_state_estimation_info_.newMsg())
     parseStateEstimationInfo(sh_state_estimation_info_.getMsg());
 
-  if (sh_control_manager_diagnostics_.newMsg() && sh_control_manager_thrust.newMsg())
-    parseControlInfo(sh_control_manager_diagnostics_.getMsg(), sh_control_manager_thrust.getMsg());
+  if (sh_control_info_.newMsg())
+    parseControlInfo(sh_control_info_.getMsg());
+
+  if (sh_collision_avoidance_info_.newMsg())
+    parseCollisionAvoidanceInfo(sh_collision_avoidance_info_.getMsg());
+
+  if (sh_uav_info_.newMsg())
+    parseUavInfo(sh_uav_info_.getMsg());
 }
 
 //}
 
 // | -------------------- support functions ------------------- |
-
-/* parseRobotState() method //{ */
-void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot_diags)
-{
-  ROS_INFO_STREAM_THROTTLE(1,"[IROCBridge]: Robot state: \"" << robot_diags->state << "\".");
-
-  const json json_msg = {
-      {"state", robot_diags->state},
-  };
-  sendJsonMessage("RobotState", json_msg);
-}
-//}
 
 /* parseGeneralRobotInfo() //{ */
 
@@ -352,17 +334,50 @@ void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimation
 
 /* parseControlInfo() //{ */
 
-void IROCBridge::parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust)
+void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info)
 {
   const json json_msg =
   {
-    {"active_controller", control_manager_diagnostics->active_controller},
-    {"available_controllers", control_manager_diagnostics->available_controllers},
-    {"active_tracker", control_manager_diagnostics->active_tracker},
-    {"available_trackers", control_manager_diagnostics->available_trackers},
-    {"thrust", thrust->data},
+    {"active_controller", control_info->active_controller},
+    {"available_controllers", control_info->available_controllers},
+    {"active_tracker", control_info->active_tracker},
+    {"available_trackers", control_info->available_trackers},
+    {"thrust", control_info->thrust},
   };
   sendJsonMessage("ControlInfo", json_msg);
+}
+
+//}
+
+/* parseCollisionAvoidanceInfo() //{ */
+
+void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info)
+{
+  const json json_msg =
+  {
+    {"collision_avoidance_enabled", collision_avoidance_info->collision_avoidance_enabled},
+    {"avoiding_collision", collision_avoidance_info->avoiding_collision},
+    {"other_robots_visible", collision_avoidance_info->other_robots_visible},
+  };
+  sendJsonMessage("CollisionAvoidanceInfo", json_msg);
+}
+
+//}
+
+/* parseUavInfo() //{ */
+
+void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info)
+{
+  const json json_msg =
+  {
+    {"armed",   uav_info->armed},
+    {"offboard", uav_info->offboard},
+    {"flight_state", uav_info->flight_state},
+    {"flight_duration", uav_info->flight_duration},
+    {"mass_nominal", uav_info->mass_nominal},
+    {"mass_estimate", uav_info->mass_estimate},
+  };
+  sendJsonMessage("UavInfo", json_msg);
 }
 
 //}
