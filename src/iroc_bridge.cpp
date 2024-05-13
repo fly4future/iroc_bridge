@@ -27,6 +27,7 @@
 #include <mrs_robot_diagnostics/ControlInfo.h>
 #include <mrs_robot_diagnostics/CollisionAvoidanceInfo.h>
 #include <mrs_robot_diagnostics/UavInfo.h>
+#include <mrs_robot_diagnostics/SystemHealthInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
 
@@ -61,6 +62,7 @@ private:
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo> sh_control_info_;
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo> sh_collision_avoidance_info_;
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo> sh_uav_info_;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo> sh_system_health_info_;
 
   ros::ServiceClient sc_arm_;
   ros::ServiceClient sc_offboard_;
@@ -80,6 +82,7 @@ private:
   void parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info);
   void parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info);
   void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info);
+  void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info);
 
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
@@ -215,6 +218,7 @@ void IROCBridge::onInit() {
   sh_control_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, "in/control_info");
   sh_collision_avoidance_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, "in/collision_avoidance_info");
   sh_uav_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, "in/uav_info");
+  sh_system_health_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, "in/system_health_info");
 
   // | ------------------------- timers ------------------------- |
 
@@ -252,11 +256,16 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
 
   if (sh_uav_info_.newMsg())
     parseUavInfo(sh_uav_info_.getMsg());
+
+  if (sh_system_health_info_.newMsg())
+    parseSystemHealthInfo(sh_system_health_info_.getMsg());
 }
 
 //}
 
-// | -------------------- support functions ------------------- |
+// --------------------------------------------------------------
+// |                 parsing and output methods                 |
+// --------------------------------------------------------------
 
 /* parseGeneralRobotInfo() //{ */
 
@@ -382,6 +391,51 @@ void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info)
 
 //}
 
+/* parseSystemHealthInfo() //{ */
+
+void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr system_health_info)
+{
+  json node_cpu_loads;
+  for (const auto& node_cpu_load : system_health_info->node_cpu_loads)
+    node_cpu_loads.emplace_back(json::array({
+          node_cpu_load.node_name,
+          node_cpu_load.cpu_load
+          }));
+
+  json required_sensors;
+  for (const auto& required_sensor : system_health_info->required_sensors)
+    required_sensors.emplace_back(json
+        {
+          {"name", required_sensor.name},
+          {"status", required_sensor.status},
+          {"ready", required_sensor.ready},
+          {"rate", required_sensor.rate},
+        });
+
+  const json json_msg =
+  {
+    {"cpu_load", system_health_info->cpu_load},
+    {"free_ram", system_health_info->free_ram},
+    {"total_ram", system_health_info->total_ram},
+    {"free_hdd", system_health_info->free_hdd},
+    {"node_cpu_loads", node_cpu_loads},
+    {"hw_api_rate", system_health_info->hw_api_rate},
+    {"control_manager_rate", system_health_info->control_manager_rate},
+    {"state_estimation_rate", system_health_info->state_estimation_rate},
+    {"gnss_uncertainty", system_health_info->gnss_uncertainty},
+    {"mag_strength", system_health_info->mag_strength},
+    {"mag_uncertainty", system_health_info->mag_uncertainty},
+    {"required_sensors", required_sensors},
+  };
+  sendJsonMessage("SystemHealthInfo", json_msg);
+}
+
+//}
+
+// --------------------------------------------------------------
+// |                       helper methods                       |
+// --------------------------------------------------------------
+
 /* sendJsonMessage() //{ */
 
 void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_msg)
@@ -394,7 +448,7 @@ void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_m
   if (res)
     ROS_INFO_STREAM_THROTTLE(1.0, res->status << ": " << res->body);
   else
-    ROS_WARN_STREAM_THROTTLE(1.0, "Failed to send PATCH request: " << to_string(res.error()));
+    ROS_WARN_STREAM_THROTTLE(1.0, "Failed to send PATCH request to address \"" << url << "\": " << to_string(res.error()));
 
   return;
 }
