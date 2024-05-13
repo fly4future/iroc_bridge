@@ -9,9 +9,10 @@ set(CATKIN_DEPENDENCIES
   cmake_modules
   roscpp
   nodelet
-  mrs_msgs
-  mrs_lib
   sensor_msgs
+  mrs_msgs
+  mrs_robot_diagnostics
+  mrs_lib
   )
 
 set(LIBRARIES

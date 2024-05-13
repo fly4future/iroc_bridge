@@ -15,9 +15,11 @@
   <depend>cmake_modules</depend>
   <depend>roscpp</depend>
   <depend>nodelet</depend>
-  <depend>mrs_msgs</depend>
-  <depend>mrs_lib</depend>
   <depend>sensor_msgs</depend>
+
+  <depend>mrs_msgs</depend>
+  <depend>mrs_robot_diagnostics</depend>
+  <depend>mrs_lib</depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelets.xml" />

@@ -27,6 +27,8 @@
 #include <mrs_msgs/ControlManagerDiagnostics.h>
 #include <mrs_msgs/Path.h>
 
+#include <mrs_robot_diagnostics/GeneralRobotInfo.h>
+
 #include "iroc_bridge/json_var_parser.h"
 
 //}
@@ -60,7 +62,7 @@ private:
   mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics> sh_robot_diags_;
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
 
-  mrs_lib::SubscribeHandler<sensor_msgs::BatteryState> sh_battery_state_;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo> sh_general_robot_info_;
 
   mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics> sh_estimation_diagnostics_;
   mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
@@ -84,7 +86,7 @@ private:
   // | ------------------ Additional functions ------------------ |
 
   void parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& uav_status);
-  void parseRobotInfo(const sensor_msgs::BatteryState::ConstPtr& battery_state);
+  void parseGeneralRobotInfo(const mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info);
   void parseStateEstimationInfo(const mrs_msgs::EstimationDiagnostics::ConstPtr& estimation_diagnostics, const mrs_msgs::Float64Stamped::ConstPtr& local_heading, const sensor_msgs::NavSatFix::ConstPtr& global_position, const mrs_msgs::Float64Stamped::ConstPtr& global_heading);
   void parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust);
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
@@ -222,7 +224,7 @@ void IROCBridge::onInit() {
   sh_uav_status_ = mrs_lib::SubscribeHandler<mrs_msgs::UavStatus>(shopts, "uav_status_in");
 
   // | ------------------------ RobotInfo ----------------------- |
-  sh_battery_state_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "battery_state_in");
+  sh_general_robot_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, "in/general_robot_info");
 
   // | ------------------- StateEstimationInfo ------------------ |
   sh_estimation_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics>(shopts, "estimation_diagnostics_in");
@@ -259,8 +261,8 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
   if (sh_robot_diags_.newMsg())
     parseRobotState(sh_robot_diags_.getMsg());
 
-  if (sh_battery_state_.newMsg())
-    parseRobotInfo(sh_battery_state_.getMsg());
+  if (sh_general_robot_info_.newMsg())
+    parseGeneralRobotInfo(sh_general_robot_info_.getMsg());
 
   if (sh_estimation_diagnostics_.newMsg() && sh_control_manager_heading_.newMsg() && sh_hw_api_gnss_.newMsg() && sh_hw_api_mag_heading_.newMsg())
     parseStateEstimationInfo(sh_estimation_diagnostics_.getMsg(), sh_control_manager_heading_.getMsg(), sh_hw_api_gnss_.getMsg(), sh_hw_api_mag_heading_.getMsg());
@@ -285,23 +287,23 @@ void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot
 }
 //}
 
-/* parseRobotInfo() //{ */
+/* parseGeneralRobotInfo() //{ */
 
-void IROCBridge::parseRobotInfo(const sensor_msgs::BatteryState::ConstPtr& battery_state)
+void IROCBridge::parseGeneralRobotInfo(const mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info)
 {
   const json json_msg =
   {
-    {"robot_name", _robot_name_},
-    {"robot_type", _robot_type_},
+    {"robot_name", general_robot_info->robot_name},
+    {"robot_type", general_robot_info->robot_type},
     {"battery_state",
-      {"voltage", battery_state->voltage},
-      {"percentage", battery_state->percentage},
-      {"wh_drained", "NOT_IMPLEMENTED"},
+      {"voltage", general_robot_info->battery_state.voltage},
+      {"percentage", general_robot_info->battery_state.percentage},
+      {"wh_drained", general_robot_info->battery_state.wh_drained},
     },
-    {"ready_to_start", "NOT_IMPLEMENTED"},
-    {"problems", "NOT_IMPLEMENTED"},
+    {"ready_to_start", general_robot_info->ready_to_start},
+    {"problem_preventing_start", general_robot_info->problem_preventing_start},
   };
-  sendJsonMessage("RobotInfo", json_msg);
+  sendJsonMessage("GeneralRobotInfo", json_msg);
 }
 
 //}
