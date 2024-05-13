@@ -2,7 +2,6 @@
 
   <!-- defines name of the namespace -->
   <arg name="ROBOT_NAME" default="$(optenv ROBOT_NAME uav1)" />
-  <arg name="ROBOT_TYPE" default="$(optenv ROBOT_TYPE x550)" />
 
   <arg name="custom_config" default="" />
 
@@ -28,8 +27,6 @@
     <!-- IROCBridge nodelet -->
     <node pkg="nodelet" type="nodelet" name="iroc_bridge" args="$(arg nodelet) iroc_bridge/IROCBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
 
-      <param name="robot_name" value="$(arg ROBOT_NAME)" />
-      <param name="robot_type" value="$(arg ROBOT_TYPE)" />
       <param name="config" value="$(find iroc_bridge)/config/config.yaml" />
       <param name="url" value="$(arg url)" />
       <param name="server_port" value="$(arg server_port)" />
@@ -47,11 +44,7 @@
       <remap from="~uav_status_in" to="mrs_uav_status/uav_status" />
 
       <remap from="~in/general_robot_info" to="state_monitor/general_robot_info" />
-
-      <remap from="~estimation_diagnostics_in" to="estimation_manager/diagnostics" />
-      <remap from="~hw_api_gnss_in" to="hw_api/gnss" />
-      <remap from="~hw_api_mag_heading_in" to="hw_api/mag_heading" />
-      <remap from="~control_manager_heading_in" to="control_manager/heading" />
+      <remap from="~in/state_estimation_info" to="state_monitor/state_estimation_info" />
 
       <remap from="~control_manager_diagnostics_in" to="control_manager/diagnostics" />
       <remap from="~control_manager_thrust_in" to="control_manager/thrust" />

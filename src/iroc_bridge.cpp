@@ -28,6 +28,7 @@
 #include <mrs_msgs/Path.h>
 
 #include <mrs_robot_diagnostics/GeneralRobotInfo.h>
+#include <mrs_robot_diagnostics/StateEstimationInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
 
@@ -55,19 +56,12 @@ private:
   httplib::Server http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
 
-  std::string _robot_name_;
-  std::string _robot_type_;
-
   // | ---------------------- ROS subscribers --------------------- |
   mrs_lib::SubscribeHandler<mrs_msgs::UavDiagnostics> sh_robot_diags_;
   mrs_lib::SubscribeHandler<mrs_msgs::UavStatus> sh_uav_status_;
 
   mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo> sh_general_robot_info_;
-
-  mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics> sh_estimation_diagnostics_;
-  mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_hw_api_gnss_;
-  mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped> sh_control_manager_heading_;
-  mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped> sh_hw_api_mag_heading_;
+  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo> sh_state_estimation_info_;
 
   mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics> sh_control_manager_diagnostics_;
   mrs_lib::SubscribeHandler<std_msgs::Float64> sh_control_manager_thrust;
@@ -86,8 +80,8 @@ private:
   // | ------------------ Additional functions ------------------ |
 
   void parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& uav_status);
-  void parseGeneralRobotInfo(const mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info);
-  void parseStateEstimationInfo(const mrs_msgs::EstimationDiagnostics::ConstPtr& estimation_diagnostics, const mrs_msgs::Float64Stamped::ConstPtr& local_heading, const sensor_msgs::NavSatFix::ConstPtr& global_position, const mrs_msgs::Float64Stamped::ConstPtr& global_heading);
+  void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info);
+  void parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info);
   void parseControlInfo(const mrs_msgs::ControlManagerDiagnostics::ConstPtr& control_manager_diagnostics, const std_msgs::Float64::ConstPtr& thrust);
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
@@ -135,8 +129,6 @@ void IROCBridge::onInit() {
 
   param_loader.addYamlFileFromParam("config");
 
-  param_loader.loadParam("robot_name", _robot_name_);
-  param_loader.loadParam("robot_type", _robot_type_);
   const auto main_timer_rate = param_loader.loadParam2<double>("main_timer_rate");
   const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("no_message_timeout");
 
@@ -227,10 +219,7 @@ void IROCBridge::onInit() {
   sh_general_robot_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, "in/general_robot_info");
 
   // | ------------------- StateEstimationInfo ------------------ |
-  sh_estimation_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::EstimationDiagnostics>(shopts, "estimation_diagnostics_in");
-  sh_hw_api_gnss_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "hw_api_gnss_in");
-  sh_control_manager_heading_ = mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped>(shopts, "control_manager_heading_in");
-  sh_hw_api_mag_heading_ = mrs_lib::SubscribeHandler<mrs_msgs::Float64Stamped>(shopts, "hw_api_mag_heading_in");
+  sh_state_estimation_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, "in/state_estimation_info");
 
   sh_control_manager_diagnostics_ = mrs_lib::SubscribeHandler<mrs_msgs::ControlManagerDiagnostics>(shopts, "control_manager_diagnostics_in");
   sh_control_manager_thrust = mrs_lib::SubscribeHandler<std_msgs::Float64>(shopts, "control_manager_thrust_in");
@@ -264,8 +253,8 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
   if (sh_general_robot_info_.newMsg())
     parseGeneralRobotInfo(sh_general_robot_info_.getMsg());
 
-  if (sh_estimation_diagnostics_.newMsg() && sh_control_manager_heading_.newMsg() && sh_hw_api_gnss_.newMsg() && sh_hw_api_mag_heading_.newMsg())
-    parseStateEstimationInfo(sh_estimation_diagnostics_.getMsg(), sh_control_manager_heading_.getMsg(), sh_hw_api_gnss_.getMsg(), sh_hw_api_mag_heading_.getMsg());
+  if (sh_state_estimation_info_.newMsg())
+    parseStateEstimationInfo(sh_state_estimation_info_.getMsg());
 
   if (sh_control_manager_diagnostics_.newMsg() && sh_control_manager_thrust.newMsg())
     parseControlInfo(sh_control_manager_diagnostics_.getMsg(), sh_control_manager_thrust.getMsg());
@@ -289,7 +278,7 @@ void IROCBridge::parseRobotState(const mrs_msgs::UavDiagnostics::ConstPtr& robot
 
 /* parseGeneralRobotInfo() //{ */
 
-void IROCBridge::parseGeneralRobotInfo(const mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info)
+void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info)
 {
   const json json_msg =
   {
@@ -310,50 +299,51 @@ void IROCBridge::parseGeneralRobotInfo(const mrs_robot_diagnostics::GeneralRobot
 
 /* parseStateEstimationInfo() //{ */
 
-void IROCBridge::parseStateEstimationInfo(const mrs_msgs::EstimationDiagnostics::ConstPtr& estimation_diagnostics, const mrs_msgs::Float64Stamped::ConstPtr& local_heading, const sensor_msgs::NavSatFix::ConstPtr& global_position, const mrs_msgs::Float64Stamped::ConstPtr& global_heading)
+void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info)
 {
   const json json_msg =
   {
-    {"estimation_frame", estimation_diagnostics->header.frame_id},
+    {"estimation_frame", state_estimation_info->header.frame_id},
     {"local_pose",
-      {"x", estimation_diagnostics->pose.position.x},
-      {"y", estimation_diagnostics->pose.position.y},
-      {"z", estimation_diagnostics->pose.position.z},
-      {"heading", local_heading->value},
+      {"x", state_estimation_info->local_pose.position.x},
+      {"y", state_estimation_info->local_pose.position.y},
+      {"z", state_estimation_info->local_pose.position.z},
+      {"heading", state_estimation_info->local_pose.heading},
     },
     {"global_pose",
-      {"latitude", global_position->latitude},
-      {"longitude", global_position->longitude},
-      {"altitude", global_position->altitude},
-      {"heading", global_heading->value},
+      {"latitude", state_estimation_info->global_pose.position.x},
+      {"longitude", state_estimation_info->global_pose.position.y},
+      {"altitude", state_estimation_info->global_pose.position.z},
+      {"heading", state_estimation_info->global_pose.heading},
     },
-    {"above_ground_level_height", estimation_diagnostics->agl_height},
+    {"above_ground_level_height", state_estimation_info->above_ground_level_height},
     {"velocity",
       {"linear",
-        {"x", estimation_diagnostics->velocity.linear.x},
-        {"y", estimation_diagnostics->velocity.linear.y},
-        {"z", estimation_diagnostics->velocity.linear.z},
+        {"x", state_estimation_info->velocity.linear.x},
+        {"y", state_estimation_info->velocity.linear.y},
+        {"z", state_estimation_info->velocity.linear.z},
       },
       {"angular",
-        {"x", estimation_diagnostics->velocity.angular.x},
-        {"y", estimation_diagnostics->velocity.angular.y},
-        {"z", estimation_diagnostics->velocity.angular.z},
+        {"x", state_estimation_info->velocity.angular.x},
+        {"y", state_estimation_info->velocity.angular.y},
+        {"z", state_estimation_info->velocity.angular.z},
       },
     },
     {"acceleration",
       {"linear",
-        {"x", estimation_diagnostics->acceleration.linear.x},
-        {"y", estimation_diagnostics->acceleration.linear.y},
-        {"z", estimation_diagnostics->acceleration.linear.z},
+        {"x", state_estimation_info->acceleration.linear.x},
+        {"y", state_estimation_info->acceleration.linear.y},
+        {"z", state_estimation_info->acceleration.linear.z},
       },
       {"angular",
-        {"x", estimation_diagnostics->acceleration.angular.x},
-        {"y", estimation_diagnostics->acceleration.angular.y},
-        {"z", estimation_diagnostics->acceleration.angular.z},
+        {"x", state_estimation_info->acceleration.angular.x},
+        {"y", state_estimation_info->acceleration.angular.y},
+        {"z", state_estimation_info->acceleration.angular.z},
       },
     },
-    {"running_estimators", estimation_diagnostics->running_state_estimators},
-    {"switchable_estimators", estimation_diagnostics->switchable_state_estimators},
+    {"current_estimator", state_estimation_info->current_estimator},
+    {"running_estimators", state_estimation_info->running_estimators},
+    {"switchable_estimators", state_estimation_info->switchable_estimators},
   };
   sendJsonMessage("StateEstimationInfo", json_msg);
 }
