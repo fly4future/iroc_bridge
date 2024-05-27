@@ -276,9 +276,11 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
     {"robot_name", general_robot_info->robot_name},
     {"robot_type", general_robot_info->robot_type},
     {"battery_state",
-      {"voltage", general_robot_info->battery_state.voltage},
-      {"percentage", general_robot_info->battery_state.percentage},
-      {"wh_drained", general_robot_info->battery_state.wh_drained},
+      {
+        {"voltage", general_robot_info->battery_state.voltage},
+        {"percentage", general_robot_info->battery_state.percentage},
+        {"wh_drained", general_robot_info->battery_state.wh_drained},
+      }
     },
     {"ready_to_start", general_robot_info->ready_to_start},
     {"problem_preventing_start", general_robot_info->problem_preventing_start},
@@ -292,49 +294,65 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
 
 void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info)
 {
-  const json json_msg =
+  const json json_msg = 
   {
     {"estimation_frame", state_estimation_info->header.frame_id},
     {"local_pose",
-      {"x", state_estimation_info->local_pose.position.x},
-      {"y", state_estimation_info->local_pose.position.y},
-      {"z", state_estimation_info->local_pose.position.z},
-      {"heading", state_estimation_info->local_pose.heading},
+        {
+          {"x", state_estimation_info->local_pose.position.x},
+          {"y", state_estimation_info->local_pose.position.y},
+          {"z", state_estimation_info->local_pose.position.z},
+          {"heading", state_estimation_info->local_pose.heading}
+        }
     },
     {"global_pose",
-      {"latitude", state_estimation_info->global_pose.position.x},
-      {"longitude", state_estimation_info->global_pose.position.y},
-      {"altitude", state_estimation_info->global_pose.position.z},
-      {"heading", state_estimation_info->global_pose.heading},
+        {
+          {"latitude", state_estimation_info->global_pose.position.x},
+          {"longitude", state_estimation_info->global_pose.position.y},
+          {"altitude", state_estimation_info->global_pose.position.z},
+          {"heading", state_estimation_info->global_pose.heading}
+        }
     },
     {"above_ground_level_height", state_estimation_info->above_ground_level_height},
     {"velocity",
-      {"linear",
-        {"x", state_estimation_info->velocity.linear.x},
-        {"y", state_estimation_info->velocity.linear.y},
-        {"z", state_estimation_info->velocity.linear.z},
-      },
-      {"angular",
-        {"x", state_estimation_info->velocity.angular.x},
-        {"y", state_estimation_info->velocity.angular.y},
-        {"z", state_estimation_info->velocity.angular.z},
-      },
+        {
+          {"linear",
+              {
+                  {"x", state_estimation_info->velocity.linear.x},
+                  {"y", state_estimation_info->velocity.linear.y},
+                  {"z", state_estimation_info->velocity.linear.z}
+              }
+          },
+          {"angular",
+              {
+                  {"x", state_estimation_info->velocity.angular.x},
+                  {"y", state_estimation_info->velocity.angular.y},
+                  {"z", state_estimation_info->velocity.angular.z}
+              }
+          }
+        }
     },
     {"acceleration",
-      {"linear",
-        {"x", state_estimation_info->acceleration.linear.x},
-        {"y", state_estimation_info->acceleration.linear.y},
-        {"z", state_estimation_info->acceleration.linear.z},
-      },
-      {"angular",
-        {"x", state_estimation_info->acceleration.angular.x},
-        {"y", state_estimation_info->acceleration.angular.y},
-        {"z", state_estimation_info->acceleration.angular.z},
-      },
+        {
+          {"linear",
+              {
+                  {"x", state_estimation_info->acceleration.linear.x},
+                  {"y", state_estimation_info->acceleration.linear.y},
+                  {"z", state_estimation_info->acceleration.linear.z}
+              }
+          },
+          {"angular",
+              {
+                  {"x", state_estimation_info->acceleration.angular.x},
+                  {"y", state_estimation_info->acceleration.angular.y},
+                  {"z", state_estimation_info->acceleration.angular.z}
+              }
+          }
+        }
     },
     {"current_estimator", state_estimation_info->current_estimator},
     {"running_estimators", state_estimation_info->running_estimators},
-    {"switchable_estimators", state_estimation_info->switchable_estimators},
+    {"switchable_estimators", state_estimation_info->switchable_estimators}
   };
   sendJsonMessage("StateEstimationInfo", json_msg);
 }
@@ -440,10 +458,10 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 
 void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_msg)
 {
-  const std::string url = "api/robot/telemetry/" + msg_type;
+  const std::string url = "/api/robot/telemetry/" + msg_type;
   const std::string body = json_msg.dump();
   const std::string content_type = "application/x-www-form-urlencoded";
-  const auto res = http_client_->Patch(url, body, content_type);
+  const auto res = http_client_->Post(url, body, content_type);
   
   if (res)
     ROS_INFO_STREAM_THROTTLE(1.0, res->status << ": " << res->body);
