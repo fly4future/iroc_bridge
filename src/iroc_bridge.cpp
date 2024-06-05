@@ -68,16 +68,20 @@ private:
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>  sh_collision_avoidance_info;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>                 sh_uav_info;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>        sh_system_health_info;
+
+    ros::ServiceClient sc_arm;
+    ros::ServiceClient sc_offboard;
+    ros::ServiceClient sc_land;
   };
 
   // | ---------------------- ROS subscribers --------------------- |
 
-  std::vector<robot_handler_t> robot_handlers_;
+  struct robot_handlers_t
+  {
+    std::mutex mtx;
+    std::vector<robot_handler_t> handlers;
+  } robot_handlers_;
    
-  ros::ServiceClient sc_arm_;
-  ros::ServiceClient sc_offboard_;
-  ros::ServiceClient sc_land_;
-
   ros::Publisher pub_path_;
 
   // | ----------------------- main timer ----------------------- |
@@ -104,6 +108,7 @@ private:
     std::string message;
   };
 
+  // some helper method overloads
   template <typename Svc_T>
   svc_call_res_t callService(ros::ServiceClient& sc, typename Svc_T::Request req);
 
@@ -168,19 +173,18 @@ void IROCBridge::onInit() {
 
   // | --------------------- service clients -------------------- |
 
-  sc_arm_ = nh_.serviceClient<std_srvs::SetBool>("arm");
-  sc_offboard_ = nh_.serviceClient<std_srvs::Trigger>("offboard");
-  sc_land_ = nh_.serviceClient<std_srvs::Trigger>("land");
-
   http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
   //TODO: move this to separate methods to not clutter the initialization
   http_srv_.Get("/takeoff", [&](const httplib::Request&, httplib::Response& res)
       {
+        std::scoped_lock lck(robot_handlers_.mtx);
+    
         ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
-        // firstly, arm the vehicle
+        // firstly, arm the vehicles
+        for (auto& rh : robot_handlers_.handlers)
         {
-          const auto resp = callService(sc_arm_, true);
+          const auto resp = callService(rh.sc_arm, true);
           if (!resp.call_success)
           {
             res.set_content(resp.message, "text/plain");
@@ -189,8 +193,9 @@ void IROCBridge::onInit() {
         }
 
         // then, switch to offboard
+        for (auto& rh : robot_handlers_.handlers)
         {
-          const auto resp = callService<std_srvs::Trigger>(sc_offboard_);
+          const auto resp = callService<std_srvs::Trigger>(rh.sc_offboard);
           if (!resp.call_success)
           {
             res.set_content(resp.message, "text/plain");
@@ -202,12 +207,17 @@ void IROCBridge::onInit() {
 
   http_srv_.Get("/land", [&](const httplib::Request&, httplib::Response& res)
       {
+        std::scoped_lock lck(robot_handlers_.mtx);
+
         ROS_INFO_STREAM_THROTTLE(1.0, "Calling land.");
-        const auto resp = callService<std_srvs::Trigger>(sc_land_);
-        if (!resp.call_success)
+        for (auto& rh : robot_handlers_.handlers)
         {
-          res.set_content(resp.message, "text/plain");
-          return;
+          const auto resp = callService<std_srvs::Trigger>(rh.sc_land);
+          if (!resp.call_success)
+          {
+            res.set_content(resp.message, "text/plain");
+            return;
+          }
         }
         res.set_content("Landing.", "text/plain");
       });
@@ -232,32 +242,41 @@ void IROCBridge::onInit() {
   shopts.queue_size         = 10;
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
-  robot_handlers_.reserve(robot_names.size());
-  for (const auto& robot_name : robot_names)
+  // populate the robot handlers vector
   {
-    robot_handler_t robot_handler;
-    robot_handler.robot_name = robot_name;
-
-    const std::string general_robot_info_topic_name = "/" + robot_name + nh_.resolveName("in/general_robot_info");
-    robot_handler.sh_general_robot_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, general_robot_info_topic_name);
-
-    const std::string state_estimation_info_topic_name = "/" + robot_name + nh_.resolveName("in/state_estimation_info");
-    robot_handler.sh_state_estimation_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, state_estimation_info_topic_name);
-
-    const std::string control_info_topic_name = "/" + robot_name + nh_.resolveName("in/control_info");
-    robot_handler.sh_control_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, control_info_topic_name);
-
-    const std::string collision_avoidance_info_topic_name = "/" + robot_name + nh_.resolveName("in/collision_avoidance_info");
-    robot_handler.sh_collision_avoidance_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, collision_avoidance_info_topic_name);
-
-    const std::string uav_info_topic_name = "/" + robot_name + nh_.resolveName("in/uav_info");
-    robot_handler.sh_uav_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, uav_info_topic_name);
-
-    const std::string system_health_info_topic_name = "/" + robot_name + nh_.resolveName("in/system_health_info");
-    robot_handler.sh_system_health_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name);
-
-    // move is necessary because copy construction of the subscribe handlers is deleted due to mutexes
-    robot_handlers_.emplace_back(std::move(robot_handler));
+    std::scoped_lock lck(robot_handlers_.mtx);
+    
+    robot_handlers_.handlers.reserve(robot_names.size());
+    for (const auto& robot_name : robot_names)
+    {
+      robot_handler_t robot_handler;
+      robot_handler.robot_name = robot_name;
+    
+      const std::string general_robot_info_topic_name = "/" + robot_name + nh_.resolveName("in/general_robot_info");
+      robot_handler.sh_general_robot_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, general_robot_info_topic_name);
+    
+      const std::string state_estimation_info_topic_name = "/" + robot_name + nh_.resolveName("in/state_estimation_info");
+      robot_handler.sh_state_estimation_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, state_estimation_info_topic_name);
+    
+      const std::string control_info_topic_name = "/" + robot_name + nh_.resolveName("in/control_info");
+      robot_handler.sh_control_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, control_info_topic_name);
+    
+      const std::string collision_avoidance_info_topic_name = "/" + robot_name + nh_.resolveName("in/collision_avoidance_info");
+      robot_handler.sh_collision_avoidance_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, collision_avoidance_info_topic_name);
+    
+      const std::string uav_info_topic_name = "/" + robot_name + nh_.resolveName("in/uav_info");
+      robot_handler.sh_uav_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, uav_info_topic_name);
+    
+      const std::string system_health_info_topic_name = "/" + robot_name + nh_.resolveName("in/system_health_info");
+      robot_handler.sh_system_health_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name);
+    
+      robot_handler.sc_arm = nh_.serviceClient<std_srvs::SetBool>("/" + robot_name + nh_.resolveName("svc/arm"));
+      robot_handler.sc_offboard = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/offboard"));
+      robot_handler.sc_land = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land"));
+    
+      // move is necessary because copy construction of the subscribe handlers is deleted due to mutexes
+      robot_handlers_.handlers.emplace_back(std::move(robot_handler));
+    }
   }
 
   // | ------------------------- timers ------------------------- |
@@ -282,7 +301,9 @@ void IROCBridge::onInit() {
 
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
 {
-  for (auto& rh : robot_handlers_)
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  for (auto& rh : robot_handlers_.handlers)
   {
     const auto& robot_name = rh.robot_name;
 
@@ -531,13 +552,13 @@ IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, typen
   typename Svc_T::Response res;
   if (sc.call(req, res))
   {
-    ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc_arm_.getService() << "\" with response \"" << res.message << "\".");
+    ROS_INFO_STREAM("Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
     return {true, res.message};
   }
   else
   {
     const std::string msg = "Failed to call service \"" + sc.getService() + "\".";
-    ROS_WARN_STREAM_THROTTLE(1.0, msg);
+    ROS_WARN_STREAM(msg);
     return {false, msg};
   }
 }

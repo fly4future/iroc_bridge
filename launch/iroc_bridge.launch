@@ -58,9 +58,9 @@
       <remap from="~in/system_health_info" to="/state_monitor/system_health_info" />
 
       <!-- Services -->
-      <remap from="~arm" to="/uav1/hw_api/arming" />
-      <remap from="~offboard" to="/uav1/hw_api/offboard" />
-      <remap from="~land" to="/uav1/uav_manager/land" />
+      <remap from="~svc/arm" to="/hw_api/arming" />
+      <remap from="~svc/offboard" to="/hw_api/offboard" />
+      <remap from="~svc/land" to="/uav_manager/land" />
 
     </node>
 
