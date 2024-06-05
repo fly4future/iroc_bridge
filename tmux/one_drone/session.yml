@@ -43,7 +43,8 @@ windows:
   - iroc_bridge:
       layout: tiled
       panes:
-        - waitForHw; export ROBOT_NAME=$UAV_NAME; roslaunch iroc_bridge iroc_bridge.launch
+        - waitForHw; roslaunch iroc_bridge iroc_bridge.launch
+          network_config:=./config/network_config.yaml
   - rviz:
       layout: tiled
       panes:

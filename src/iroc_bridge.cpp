@@ -54,15 +54,17 @@ private:
   std::thread th_http_srv_;
   httplib::Server http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
+  std::vector<std::string> robot_names_;
 
   // | ---------------------- ROS subscribers --------------------- |
 
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo> sh_general_robot_info_;
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo> sh_state_estimation_info_;
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo> sh_control_info_;
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo> sh_collision_avoidance_info_;
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo> sh_uav_info_;
-  mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo> sh_system_health_info_;
+   
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>> sh_general_robot_info_vector_;
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>> sh_state_estimation_info_vector_;
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>> sh_control_info_vector_;
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>> sh_collision_avoidance_info_vector_;
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>> sh_uav_info_vector_;
+  std::vector<mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>> sh_system_health_info_vector_;
 
   ros::ServiceClient sc_arm_;
   ros::ServiceClient sc_offboard_;
@@ -77,12 +79,12 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info);
-  void parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info);
-  void parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info);
-  void parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info);
-  void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info);
-  void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info);
+  void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string &robot_name);
+  void parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info, const std::string &robot_name);
+  void parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info, const std::string &robot_name);
+  void parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info, const std::string &robot_name);
+  void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string &robot_name);
+  void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info, const std::string &robot_name);
 
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
@@ -121,6 +123,7 @@ void IROCBridge::onInit() {
   mrs_lib::ParamLoader param_loader(nh_, "IROCBridge");
 
   std::string custom_config_path;
+  std::string network_config_path;
 
   param_loader.loadParam("custom_config", custom_config_path);
 
@@ -130,12 +133,20 @@ void IROCBridge::onInit() {
 
   param_loader.addYamlFileFromParam("config");
 
+  param_loader.loadParam("network_config", network_config_path);
+
+  if (network_config_path != "") {
+    param_loader.addYamlFile(network_config_path);
+  }
+
   const auto main_timer_rate = param_loader.loadParam2<double>("main_timer_rate");
   const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("no_message_timeout");
 
   const auto url = param_loader.loadParam2<std::string>("url");
   const auto client_port = param_loader.loadParam2<int>("client_port");
   const auto server_port = param_loader.loadParam2<int>("server_port");
+
+  param_loader.loadParam("network/robot_names", robot_names_);
 
   if (!param_loader.loadedSuccessfully())
   {
@@ -213,12 +224,25 @@ void IROCBridge::onInit() {
   shopts.queue_size         = 10;
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
-  sh_general_robot_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, "in/general_robot_info");
-  sh_state_estimation_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, "in/state_estimation_info");
-  sh_control_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, "in/control_info");
-  sh_collision_avoidance_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, "in/collision_avoidance_info");
-  sh_uav_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, "in/uav_info");
-  sh_system_health_info_ = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, "in/system_health_info");
+  for (int it = 0; it < int(robot_names_.size()); it++) {
+    std::string general_robot_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/general_robot_info");
+    sh_general_robot_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, general_robot_info_topic_name));
+
+    std::string state_estimation_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/state_estimation_info");
+    sh_state_estimation_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::StateEstimationInfo>(shopts, state_estimation_info_topic_name));
+
+    std::string control_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/control_info");
+    sh_control_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::ControlInfo>(shopts, control_info_topic_name));
+
+    std::string collision_avoidance_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/collision_avoidance_info");
+    sh_collision_avoidance_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo>(shopts, collision_avoidance_info_topic_name));
+
+    std::string uav_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/uav_info");
+    sh_uav_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>(shopts, uav_info_topic_name));
+
+    std::string system_health_info_topic_name = "/" + robot_names_.at(it) + nh_.resolveName("in/system_health_info");
+    sh_system_health_info_vector_.push_back(mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name));
+  }
 
   // | ------------------------- timers ------------------------- |
 
@@ -242,23 +266,26 @@ void IROCBridge::onInit() {
 
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
 {
-  if (sh_general_robot_info_.newMsg())
-    parseGeneralRobotInfo(sh_general_robot_info_.getMsg());
+  for (int it = 0; it < int(robot_names_.size()); it++) {
 
-  if (sh_state_estimation_info_.newMsg())
-    parseStateEstimationInfo(sh_state_estimation_info_.getMsg());
+    if (sh_general_robot_info_vector_.at(it).newMsg())
+      parseGeneralRobotInfo(sh_general_robot_info_vector_.at(it).getMsg(), robot_names_.at(it));
 
-  if (sh_control_info_.newMsg())
-    parseControlInfo(sh_control_info_.getMsg());
+    if (sh_state_estimation_info_vector_.at(it).newMsg())
+      parseStateEstimationInfo(sh_state_estimation_info_vector_.at(it).getMsg(), robot_names_.at(it));
 
-  if (sh_collision_avoidance_info_.newMsg())
-    parseCollisionAvoidanceInfo(sh_collision_avoidance_info_.getMsg());
+    if (sh_control_info_vector_.at(it).newMsg())
+      parseControlInfo(sh_control_info_vector_.at(it).getMsg(), robot_names_.at(it));
 
-  if (sh_uav_info_.newMsg())
-    parseUavInfo(sh_uav_info_.getMsg());
+    if (sh_collision_avoidance_info_vector_.at(it).newMsg())
+      parseCollisionAvoidanceInfo(sh_collision_avoidance_info_vector_.at(it).getMsg(), robot_names_.at(it));
 
-  if (sh_system_health_info_.newMsg())
-    parseSystemHealthInfo(sh_system_health_info_.getMsg());
+    if (sh_uav_info_vector_.at(it).newMsg())
+      parseUavInfo(sh_uav_info_vector_.at(it).getMsg(), robot_names_.at(it));
+
+    if (sh_system_health_info_vector_.at(it).newMsg())
+      parseSystemHealthInfo(sh_system_health_info_vector_.at(it).getMsg(), robot_names_.at(it));
+  }
 }
 
 //}
@@ -269,7 +296,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent &event)
 
 /* parseGeneralRobotInfo() //{ */
 
-void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info)
+void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string &robot_name)
 {
   const json json_msg =
   {
@@ -292,10 +319,11 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
 
 /* parseStateEstimationInfo() //{ */
 
-void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info)
+void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info, const std::string &robot_name)
 {
   const json json_msg = 
   {
+    {"robot_name", robot_name},
     {"estimation_frame", state_estimation_info->header.frame_id},
     {"local_pose",
         {
@@ -361,10 +389,11 @@ void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimation
 
 /* parseControlInfo() //{ */
 
-void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info)
+void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info, const std::string &robot_name)
 {
   const json json_msg =
   {
+    {"robot_name", robot_name},
     {"active_controller", control_info->active_controller},
     {"available_controllers", control_info->available_controllers},
     {"active_tracker", control_info->active_tracker},
@@ -378,10 +407,11 @@ void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr c
 
 /* parseCollisionAvoidanceInfo() //{ */
 
-void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info)
+void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info, const std::string &robot_name)
 {
   const json json_msg =
   {
+    {"robot_name", robot_name},
     {"collision_avoidance_enabled", collision_avoidance_info->collision_avoidance_enabled},
     {"avoiding_collision", collision_avoidance_info->avoiding_collision},
     {"other_robots_visible", collision_avoidance_info->other_robots_visible},
@@ -393,10 +423,11 @@ void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvo
 
 /* parseUavInfo() //{ */
 
-void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info)
+void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string &robot_name)
 {
   const json json_msg =
   {
+    {"robot_name", robot_name},
     {"armed",   uav_info->armed},
     {"offboard", uav_info->offboard},
     {"flight_state", uav_info->flight_state},
@@ -411,7 +442,7 @@ void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info)
 
 /* parseSystemHealthInfo() //{ */
 
-void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr system_health_info)
+void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr system_health_info, const std::string &robot_name)
 {
   json node_cpu_loads;
   for (const auto& node_cpu_load : system_health_info->node_cpu_loads)
@@ -432,6 +463,7 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 
   const json json_msg =
   {
+    {"robot_name", robot_name},
     {"cpu_load", system_health_info->cpu_load},
     {"free_ram", system_health_info->free_ram},
     {"total_ram", system_health_info->total_ram},
