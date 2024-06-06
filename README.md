@@ -23,6 +23,17 @@ You can run the whole simulation, including the iroc_bridge package, using the p
 ./tmux/one_drone/start.sh
 ```
 
+There are more sessions ready to be used.
+
+We prepared sessions running mrs_multirotor_simulator (a lightway simulator that allows to run many drones at once without the high computation requirements).
+Those sessions have `mrs_` appendix in the names of the folders. For example, session for the one drone:
+
+```bash
+./tmux/mrs_one_drone/start.sh
+```
+
+NOTE: Not all sensor data are simulated in the mrs_multirotor_simulator!
+
 The call the services prepared in the terminal window.
 
 ## Package structure
@@ -34,3 +45,4 @@ See [ROS packages](http://wiki.ros.org/Packages)
 * `launch` directory contains `.launch` files which are used to parametrize the nodelet. Command-line arguments, as well as environment variables, can be loaded from the launch files, the nodelet can be put into the correct namespace, config files are loaded, and parameters passed to the nodelet. See [.launch files](http://wiki.ros.org/roslaunch/XML)
 * `config` directory contains parameters in `.yaml` files. See [.yaml files](http://wiki.ros.org/rosparam)
 * `package.xml` defines properties of the package, such as package name and dependencies. See [package.xml](http://wiki.ros.org/catkin/package.xml)
+* `tmux` directory contains prepared tmux sessions  
