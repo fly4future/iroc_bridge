@@ -176,7 +176,7 @@ void IROCBridge::onInit() {
   http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
   //TODO: move this to separate methods to not clutter the initialization
-  http_srv_.Get("/takeoff", [&](const httplib::Request&, httplib::Response& res)
+  http_srv_.Get("/takeoff_all", [&](const httplib::Request&, httplib::Response& res)
       {
         std::scoped_lock lck(robot_handlers_.mtx);
     
@@ -205,7 +205,7 @@ void IROCBridge::onInit() {
         res.set_content("Taking off.", "text/plain");
       });
 
-  http_srv_.Get("/land", [&](const httplib::Request&, httplib::Response& res)
+  http_srv_.Get("/land_all", [&](const httplib::Request&, httplib::Response& res)
       {
         std::scoped_lock lck(robot_handlers_.mtx);
 

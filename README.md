@@ -36,6 +36,17 @@ NOTE: Not all sensor data are simulated in the mrs_multirotor_simulator!
 
 The call the services prepared in the terminal window.
 
+## How to control the drones using the iroc_bridge
+When the iroc_bridge is running and drones are ready you can call takeoff or land for all available drones using a web browser by visiting the following links:
+
+```url
+http://localhost:8080/takeoff_all
+```
+
+```url
+http://localhost:8080/land_all
+```
+
 ## Package structure
 
 See [ROS packages](http://wiki.ros.org/Packages)
