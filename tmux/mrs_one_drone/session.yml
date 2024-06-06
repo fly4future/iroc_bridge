@@ -15,13 +15,11 @@ windows:
   - simulator:
       layout: tiled
       panes:
-        - waitForRos; roslaunch mrs_uav_gazebo_simulation simulation.launch world_name:=grass_plane gui:=true
-        - waitForGazebo; rosservice call /mrs_drone_spawner/spawn "1 --$UAV_TYPE --enable-rangefinder"
-        - export UAV_NAME=uav1; waitForControl; gz camera -c gzclient_camera -f $UAV_NAME; history -s gz camera -c gzclient_camera -f $UAV_NAME
+        - waitForRos; roslaunch mrs_multirotor_simulator multirotor_simulator.launch custom_config:=./config/simulator.yaml
   - hw_api:
       layout: tiled
       panes:
-        - waitForTime; roslaunch mrs_uav_px4_api api.launch
+        - waitForTime; roslaunch mrs_multirotor_simulator hw_api.launch custom_config:=./config/hw_api.yaml
   - takeoff:
       layout: tiled
       panes:
