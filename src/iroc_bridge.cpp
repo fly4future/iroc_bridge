@@ -180,7 +180,7 @@ void IROCBridge::onInit() {
       {
         std::scoped_lock lck(robot_handlers_.mtx);
     
-        ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
+        ROS_INFO_STREAM_THROTTLE(1.0, "Calling arm.");
         // firstly, arm the vehicles
         for (auto& rh : robot_handlers_.handlers)
         {
@@ -192,6 +192,10 @@ void IROCBridge::onInit() {
           }
         }
 
+        ROS_INFO_STREAM_THROTTLE(1.0, "Waiting one second.");
+        ros::Duration(1.0).sleep();
+
+        ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff by switching to the offboard mode");
         // then, switch to offboard
         for (auto& rh : robot_handlers_.handlers)
         {
