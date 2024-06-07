@@ -101,6 +101,8 @@ private:
   void sendJsonMessage(const std::string& msg_type, const json& json_msg);
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
+  void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
+  void changeMissionStateCallback(const httplib::Request&, httplib::Response& res);
 
   struct svc_call_res_t
   {
@@ -228,6 +230,12 @@ void IROCBridge::onInit() {
 
   const httplib::Server::Handler hdlr_set_path = std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_path", hdlr_set_path);
+
+  const httplib::Server::Handler hdlr_set_waypoint_mission = std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post("/set_waypoint_mission", hdlr_set_waypoint_mission);
+
+  const httplib::Server::Handler hdlr_change_mission_state = std::bind(&IROCBridge::changeMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post("/change_mission_state", hdlr_change_mission_state);
 
   th_http_srv_ = std::thread([&]()
       {
@@ -633,6 +641,74 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
   msg_path.use_heading = use_heading;
   pub_path_.publish(msg_path);
   ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
+}
+//}
+
+/* waypointMissionCallback() method //{ */
+void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::Response& res)
+{
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a waypointMissionCallback message JSON -> ROS.");
+  json json_msg;
+  try
+  {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e)
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
+  }
+
+  std::string frame_id;
+  std::string robot_name;
+  std::string terminal_action;
+
+  json points;
+  const auto succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"points", &points}, {"terminal_action", &terminal_action}});
+  if (!succ)
+    return;
+
+  if (!points.is_array())
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    return;
+  }
+
+  const int print_indent = 2;
+  ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
+}
+//}
+
+/* changeMissionStateCallback() method //{ */
+void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib::Response& res)
+{
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a changeMissionStateCallback message JSON -> ROS.");
+  json json_msg;
+  try
+  {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e)
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
+  }
+
+  std::string type;
+
+  json robot_names;
+  const auto succ = parse_vars(json_msg, {{"type", &type}, {"robot_names", &robot_names}});
+  if (!succ)
+    return;
+
+  if (!robot_names.is_array())
+  {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    return;
+  }
+
+  const int print_indent = 2;
+  ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
 }
 //}
 

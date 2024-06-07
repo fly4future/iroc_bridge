@@ -45,6 +45,11 @@ windows:
       panes:
         - waitForHw; roslaunch iroc_bridge iroc_bridge.launch
           network_config:=./config/network_config.yaml
+  - waypoint_mission:
+      layout: tiled
+      panes:
+        - history -s "curl -d \"@example_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
+          history -s "curl -d \"@example_change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
   - rviz:
       layout: tiled
       panes:
