@@ -595,6 +595,7 @@ IROCBridge::svc_call_res_t IROCBridge::callService(ros::ServiceClient& sc, const
 void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& res)
 {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a path message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
   try
   {
@@ -640,7 +641,9 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
   msg_path.fly_now = true;
   msg_path.use_heading = use_heading;
   pub_path_.publish(msg_path);
+
   ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
+  res.status = httplib::StatusCode::Accepted_202;
 }
 //}
 
@@ -648,6 +651,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
 void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::Response& res)
 {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a waypointMissionCallback message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
   try
   {
@@ -676,6 +680,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 
   const int print_indent = 2;
   ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
+  res.status = httplib::StatusCode::Accepted_202;
 }
 //}
 
@@ -683,6 +688,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib::Response& res)
 {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a changeMissionStateCallback message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
   try
   {
@@ -691,6 +697,7 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
   catch (const json::exception& e)
   {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    res.status = httplib::StatusCode::UnprocessableContent_422;
     return;
   }
 
@@ -709,6 +716,7 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
 
   const int print_indent = 2;
   ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
+  res.status = httplib::StatusCode::Accepted_202;
 }
 //}
 

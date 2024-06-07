@@ -48,8 +48,8 @@ windows:
   - waypoint_mission:
       layout: tiled
       panes:
-        - history -s "curl -d \"@example_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
-          history -s "curl -d \"@example_change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
+        - history -s "curl -v -d \"@example_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
+          history -s "curl -v -d \"@example_change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
   - rviz:
       layout: tiled
       panes:
