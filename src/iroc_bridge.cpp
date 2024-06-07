@@ -697,7 +697,6 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
   catch (const json::exception& e)
   {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    res.status = httplib::StatusCode::UnprocessableContent_422;
     return;
   }
 
