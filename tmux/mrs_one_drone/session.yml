@@ -50,6 +50,11 @@ windows:
       panes:
         - history -s "curl -v -d \"@example_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
           history -s "curl -v -d \"@example_change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
+  - takeoff and land:
+      layout: tiled
+      panes:
+        - history -s "curl -v -d \"@example_arm_and_takeoff.json\" -X POST http://localhost:8080/arm_and_takeoff"; 
+          history -s "curl -v -d \"@example_land.json\" -X POST http://localhost:8080/land"
   - rviz:
       layout: tiled
       panes:
