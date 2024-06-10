@@ -1,0 +1,10 @@
+{
+  "robot_name":"uav1",
+  "frame_id":"local_origin",
+  "points":[
+    {
+      "x": 10, "y": 10, "z": 2, "heading": 1
+    }
+  ],
+  "terminal_action": "none"
+}
