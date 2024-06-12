@@ -85,8 +85,6 @@ private:
     std::mutex mtx;
     std::vector<robot_handler_t> handlers;
   } robot_handlers_;
-   
-  ros::Publisher pub_path_;
 
   // | ----------------------- main timer ----------------------- |
 
@@ -244,14 +242,20 @@ void IROCBridge::onInit() {
     
       const std::string system_health_info_topic_name = "/" + robot_name + nh_.resolveName("in/system_health_info");
       robot_handler.sh_system_health_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name);
-    
+
       robot_handler.sc_arm = nh_.serviceClient<std_srvs::SetBool>("/" + robot_name + nh_.resolveName("svc/arm"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/arm\' -> \'%s\'", robot_handler.sc_arm.getService().c_str());
+
       robot_handler.sc_offboard = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/offboard"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/offboard\' -> \'%s\'", robot_handler.sc_offboard.getService().c_str());
+
       robot_handler.sc_land = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land"));
-    
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land\' -> \'%s\'", robot_handler.sc_land.getService().c_str());
+
 
       // | ----------------------- publishers ----------------------- |
       robot_handler.pub_path = nh_.advertise<mrs_msgs::Path>("/" + robot_name + nh_.resolveName("out/path"), 2);
+      ROS_INFO("[IROCBridge]: Created publisher on topic \'out/path\' -> \'%s\'", robot_handler.pub_path.getTopic().c_str());
 
       // move is necessary because copy construction of the subscribe handlers is deleted due to mutexes
       robot_handlers_.handlers.emplace_back(std::move(robot_handler));

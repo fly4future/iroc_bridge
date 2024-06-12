@@ -44,7 +44,7 @@
       <param if="$(eval not arg('custom_config') == '' and not arg('custom_config')[0] == '/')" name="custom_config" value="$(env PWD)/$(arg custom_config)" />
 
       <!-- Publishers -->
-      <remap from="~path_out" to="/uav1/trajectory_generation/path" />
+      <remap from="~out/path" to="/trajectory_generation/path" />
 
       <!-- Subscribers -->
       <remap from="~in/general_robot_info" to="/state_monitor/general_robot_info" />

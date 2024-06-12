@@ -45,16 +45,20 @@ windows:
       panes:
         - waitForHw; roslaunch iroc_bridge iroc_bridge.launch
           network_config:=./config/network_config.yaml
-  - waypoint_mission:
+  - takeoff_and_land:
       layout: tiled
       panes:
-        - history -s "curl -v -d \"@example_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
-          history -s "curl -v -d \"@example_change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
-  - takeoff and land:
+        - history -s "curl -v -d \"@../../json_examples/takeoff.json\" -X POST http://localhost:8080/takeoff"; 
+          history -s "curl -v -d \"@../../json_examples/land.json\" -X POST http://localhost:8080/land"
+  - path_loading:
       layout: tiled
       panes:
-        - history -s "curl -v -d \"@example_arm_and_takeoff.json\" -X POST http://localhost:8080/arm_and_takeoff"; 
-          history -s "curl -v -d \"@example_land.json\" -X POST http://localhost:8080/land"
+        - history -s "curl -v -d \"@../../json_examples/set_path.json\" -X POST http://localhost:8080/set_path"
+  - mission_commands:
+      layout: tiled
+      panes:
+        - history -s "curl -v -d \"@../../json_examples/waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
+          history -s "curl -v -d \"@../../json_examples/change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
   - rviz:
       layout: tiled
       panes:
