@@ -82,7 +82,7 @@ private:
 
   struct robot_handlers_t
   {
-    std::mutex mtx;
+    std::recursive_mutex mtx;
     std::vector<robot_handler_t> handlers;
   } robot_handlers_;
 
