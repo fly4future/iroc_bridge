@@ -113,6 +113,7 @@ private:
   void takeoffAllCallback(const httplib::Request&, httplib::Response& res);
   void landCallback(const httplib::Request&, httplib::Response& res);
   void landAllCallback(const httplib::Request&, httplib::Response& res);
+  void availableRobotsCallback(const httplib::Request&, httplib::Response& res);
 
   // some helper method overloads
   template <typename Svc_T>
@@ -197,6 +198,9 @@ void IROCBridge::onInit() {
 
   const httplib::Server::Handler hdlr_land_all = std::bind(&IROCBridge::landAllCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Get("/land_all", hdlr_land_all);
+
+  const httplib::Server::Handler hdlr_available_robots = std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Get("/available_robots", hdlr_available_robots);
 
   th_http_srv_ = std::thread([&]()
       {
@@ -957,6 +961,24 @@ void IROCBridge::landAllCallback(const httplib::Request& req, httplib::Response&
 
   res.status = httplib::StatusCode::Accepted_202;
   res.body = result.message;
+}
+//}
+
+/* availableRobotsCallback() method //{ */
+void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::Response& res)
+{
+  ROS_INFO_STREAM("[IROCBridge]: Received request for available robots");
+  res.status = httplib::StatusCode::Accepted_202;
+  auto json_robots = json::array();
+  for (const auto& rh : robot_handlers_.handlers)
+    json_robots.push_back(rh.robot_name);
+
+  const json json_msg =
+  {
+    {"robot_names", json_robots},
+  };
+
+  res.body = json_msg.dump();
 }
 //}
 
