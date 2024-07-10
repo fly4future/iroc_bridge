@@ -16,10 +16,11 @@
   <depend>roscpp</depend>
   <depend>nodelet</depend>
   <depend>sensor_msgs</depend>
-
+  <depend>actionlib</depend>
   <depend>mrs_msgs</depend>
   <depend>mrs_robot_diagnostics</depend>
   <depend>mrs_lib</depend>
+  <depend>mrs_mission_manager</depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelets.xml" />

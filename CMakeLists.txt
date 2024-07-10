@@ -13,6 +13,8 @@ set(CATKIN_DEPENDENCIES
   mrs_msgs
   mrs_robot_diagnostics
   mrs_lib
+  mrs_mission_manager
+  actionlib
   )
 
 set(LIBRARIES
@@ -29,6 +31,7 @@ catkin_package(
   )
 
 include_directories(
+  INCLUDE_DIRS include
   ${catkin_INCLUDE_DIRS}
   include
   )
