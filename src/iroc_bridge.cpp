@@ -45,7 +45,11 @@ using json = nlohmann::json;
 
 using vec3_t = Eigen::Vector3d;
 using vec4_t = Eigen::Vector4d;
-typedef actionlib::SimpleActionClient<mrs_mission_manager::waypointMissionAction> MissionManagerClient;
+
+using namespace actionlib;
+
+typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction> MissionManagerClient;
+typedef mrs_mission_manager::waypointMissionGoal                       ActionServerGoal;
 
 /* class IROCBridge //{ */
 
@@ -66,6 +70,8 @@ private:
     std::string message;
   };
 
+  // | ---------------------- ROS subscribers --------------------- |
+
   struct robot_handler_t
   {
     std::string                                                              robot_name;
@@ -79,13 +85,12 @@ private:
     ros::ServiceClient sc_arm;
     ros::ServiceClient sc_offboard;
     ros::ServiceClient sc_land;
+    ros::ServiceClient sc_mission_activation;
 
-    std::shared_ptr<MissionManagerClient> action_client_ptr;
+    std::unique_ptr<MissionManagerClient> action_client_ptr;
 
     ros::Publisher pub_path;
   };
-
-  // | ---------------------- ROS subscribers --------------------- |
 
   struct robot_handlers_t
   {
@@ -261,13 +266,16 @@ void IROCBridge::onInit() {
       robot_handler.sc_land = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land\' -> \'%s\'", robot_handler.sc_land.getService().c_str());
 
+      robot_handler.sc_mission_activation = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_activation"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_activation\' -> \'%s\'", robot_handler.sc_mission_activation.getService().c_str());
+
       // | ----------------------- publishers ----------------------- |
       robot_handler.pub_path = nh_.advertise<mrs_msgs::Path>("/" + robot_name + nh_.resolveName("out/path"), 2);
       ROS_INFO("[IROCBridge]: Created publisher on topic \'out/path\' -> \'%s\'", robot_handler.pub_path.getTopic().c_str());
 
       // | --------------------- action clients --------------------- |
       const std::string waypoint_action_client_topic = "/" + robot_name + nh_.resolveName("ac/waypoint_mission");
-      robot_handler.action_client_ptr = std::make_shared<MissionManagerClient>(waypoint_action_client_topic);
+      robot_handler.action_client_ptr                = std::make_unique<MissionManagerClient>(waypoint_action_client_topic, false);
       ROS_INFO("[IROCBridge]: Created action client on topic \'ac/waypoint_mission\' -> \'%s\'", waypoint_action_client_topic.c_str());
 
       // move is necessary because copy construction of the subscribe handlers is deleted due to mutexes
@@ -499,8 +507,13 @@ template <typename Svc_T>
 IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc, typename Svc_T::Request req) {
   typename Svc_T::Response res;
   if (sc.call(req, res)) {
-    ROS_INFO_STREAM("Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
-    return {true, res.message};
+    if (res.success) {
+      ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      return {true, res.message};
+    } else {
+      ROS_ERROR_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      return {false, res.message};
+    }
   } else {
     const std::string msg = "Failed to call service \"" + sc.getService() + "\".";
     ROS_WARN_STREAM(msg);
@@ -591,8 +604,7 @@ IROCBridge::result_t IROCBridge::takeoffAction(const std::vector<std::string>& r
   for (const auto& rh_ptr : robot_handlers) {
     const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_offboard);
     if (!resp.success) {
-      ss << "failed to switch \"" << rh_ptr->robot_name << "\" to offobard\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Failed to call offboard of robot \"" << rh_ptr->robot_name << "\".");
+      ss << "failed to switch \"" << rh_ptr->robot_name << "\" to offboard\n";
       everything_ok = false;
     }
   }
@@ -613,9 +625,13 @@ IROCBridge::result_t IROCBridge::landAction(const std::vector<std::string>& robo
   ROS_INFO_STREAM_THROTTLE(1.0, "Calling land.");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr)
+    if (rh_ptr != nullptr) {
       const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_land);
-    else {
+      if (!resp.success) {
+        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        everything_ok = false;
+      }
+    } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
@@ -707,9 +723,9 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     return;
   }
 
-  std::string frame_id;
+  int         frame_id;
+  int         terminal_action;
   std::string robot_name;
-  std::string terminal_action;
   json        points;
   const auto  succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"points", &points}, {"terminal_action", &terminal_action}});
   if (!succ)
@@ -731,9 +747,27 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     return;
   }
 
-  const int print_indent = 2;
-  ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
+  std::vector<mrs_msgs::Reference> ref_points;
+  ref_points.reserve(points.size());
+  bool use_heading = false;
+  for (const auto& el : points) {
+    mrs_msgs::Reference ref;
+    const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}, {"heading", &ref.heading}});
+    if (!succ)
+      return;
+    ref_points.push_back(ref);
+  }
+  ActionServerGoal action_goal;
+  action_goal.frame_id        = frame_id;
+  action_goal.terminal_action = terminal_action;
+  action_goal.points          = ref_points;
+
+  rh_ptr->action_client_ptr->sendGoal(action_goal);
+
+  ss << "set a path with " << points.size() << " length for robot \"" << robot_name << "\"";
+  ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
   res.status = httplib::StatusCode::Accepted_202;
+  res.body   = ss.str();
 }
 //}
 
@@ -775,9 +809,48 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
     }
   }
 
-  const int print_indent = 2;
-  ROS_INFO("[IROCBridge]: msg: \n%s", json_msg.dump(print_indent).c_str());
+  if (type == "start") {
+    ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission activation.");
+    for (const auto& robot_name : robot_names) {
+      auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+      if (rh_ptr != nullptr) {
+        const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_mission_activation);
+        if (!resp.success) {
+          ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        }
+      } else {
+        ss << "robot " << robot_name << " not found, skipping\n";
+        ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot " << robot_name << " not found. Skipping.");
+      }
+    }
+  } else if (type == "stop") {
+    ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission stop.");
+    for (const auto& robot_name : robot_names) {
+      auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+      if (rh_ptr != nullptr) {
+        const auto action_client_state = rh_ptr->action_client_ptr->getState();
+        if (action_client_state.isDone()) {
+          ss << "robot \"" << robot_name << "\" mission done, skipping\n";
+          ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" mission done. Skipping.");
+        } else {
+          ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Cancelling \"" << robot_name << "\" mission.");
+          rh_ptr->action_client_ptr->cancelGoal();
+        }
+
+      } else {
+        ss << "robot \"" << robot_name << "\" not found, skipping\n";
+        ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      }
+    }
+  } else {
+    ss << "Bad \'type\' input: ]'" << type.c_str() << "\'. Supported type are \'start\' and \'stop\'.";
+    ROS_ERROR_THROTTLE(1.0, "[IROCBridge]: Bad \'type\' input: %s. Supported type are \'start\' and \'stop\'.", type.c_str());
+    res.status = httplib::StatusCode::BadRequest_400;
+    res.body   = ss.str();
+    return;
+  }
   res.status = httplib::StatusCode::Accepted_202;
+  res.body   = ss.str();
 }
 //}
 
@@ -882,7 +955,6 @@ void IROCBridge::landAllCallback(const httplib::Request& req, httplib::Response&
 /* availableRobotsCallback() method //{ */
 void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::Response& res) {
   ROS_INFO_STREAM("[IROCBridge]: Received request for available robots");
-  res.status       = httplib::StatusCode::Accepted_202;
   auto json_robots = json::array();
   for (const auto& rh : robot_handlers_.handlers)
     json_robots.push_back(rh.robot_name);
@@ -891,7 +963,8 @@ void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::R
       {"robot_names", json_robots},
   };
 
-  res.body = json_msg.dump();
+  res.body   = json_msg.dump();
+  res.status = httplib::StatusCode::Accepted_202;
 }
 //}
 
