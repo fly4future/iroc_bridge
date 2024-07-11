@@ -2,5 +2,5 @@
   "robot_names": [
     "uav1"
   ],
-  "type": "stop"
+  "type": "start"
 }

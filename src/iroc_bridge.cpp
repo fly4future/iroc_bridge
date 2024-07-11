@@ -82,8 +82,7 @@ private:
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo>                sh_uav_info;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>       sh_system_health_info;
 
-    ros::ServiceClient sc_arm;
-    ros::ServiceClient sc_offboard;
+    ros::ServiceClient sc_takeoff;
     ros::ServiceClient sc_land;
     ros::ServiceClient sc_mission_activation;
 
@@ -257,11 +256,8 @@ void IROCBridge::onInit() {
       const std::string system_health_info_topic_name = "/" + robot_name + nh_.resolveName("in/system_health_info");
       robot_handler.sh_system_health_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name);
 
-      robot_handler.sc_arm = nh_.serviceClient<std_srvs::SetBool>("/" + robot_name + nh_.resolveName("svc/arm"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/arm\' -> \'%s\'", robot_handler.sc_arm.getService().c_str());
-
-      robot_handler.sc_offboard = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/offboard"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/offboard\' -> \'%s\'", robot_handler.sc_offboard.getService().c_str());
+      robot_handler.sc_takeoff = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/takeoff"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/takeoff\' -> \'%s\'", robot_handler.sc_takeoff.getService().c_str());
 
       robot_handler.sc_land = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land\' -> \'%s\'", robot_handler.sc_land.getService().c_str());
@@ -572,39 +568,18 @@ IROCBridge::result_t IROCBridge::takeoffAction(const std::vector<std::string>& r
   ss << "Result:\n";
 
   // check that all robot names are valid and find the corresponding robot handlers
-  std::vector<robot_handler_t*> robot_handlers;
-  robot_handlers.reserve(robot_names.size());
+  ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr)
-      robot_handlers.push_back(rh_ptr);
-    else {
+    if (rh_ptr != nullptr) {
+      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_takeoff);
+      if (!resp.success) {
+        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        everything_ok = false;
+      }
+    } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
-      everything_ok = false;
-    }
-  }
-
-  // firstly, arm the vehicles
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling arm.");
-  for (const auto& rh_ptr : robot_handlers) {
-    const auto resp = callService(rh_ptr->sc_arm, true);
-    if (!resp.success) {
-      ss << "failed to arm \"" << rh_ptr->robot_name << "\"\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Failed to call arm service of robot \"" << rh_ptr->robot_name << "\".");
-      everything_ok = false;
-    }
-  }
-
-  const ros::Duration wait_after_arm(1.0);
-  ROS_INFO_STREAM_THROTTLE(1.0, "Waiting " << wait_after_arm.toSec() << "s after arming before swithing to offboard mode.");
-  wait_after_arm.sleep();
-
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff by switching to the offboard mode");
-  for (const auto& rh_ptr : robot_handlers) {
-    const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_offboard);
-    if (!resp.success) {
-      ss << "failed to switch \"" << rh_ptr->robot_name << "\" to offboard\n";
       everything_ok = false;
     }
   }
@@ -761,6 +736,14 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   action_goal.frame_id        = frame_id;
   action_goal.terminal_action = terminal_action;
   action_goal.points          = ref_points;
+
+  if (!rh_ptr->action_client_ptr->getState().isDone()) {
+    ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n";
+    ROS_INFO_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body   = ss.str();
+    return;
+  }
 
   rh_ptr->action_client_ptr->sendGoal(action_goal);
 
