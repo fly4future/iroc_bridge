@@ -102,6 +102,13 @@ private:
   ros::Timer timer_main_;
   void       timerMain(const ros::TimerEvent& event);
 
+  // | ----------------- action client callbacks ---------------- |
+
+  void waypointMissionActiveCallback(const std::string& robot_name);
+  void waypointMissionDoneCallback(const SimpleClientGoalState& state, const mrs_mission_manager::waypointMissionResultConstPtr& result,
+                                   const std::string& robot_name);
+  void waypointMissionFeedbackCallback(const mrs_mission_manager::waypointMissionFeedbackConstPtr& result, const std::string& robot_name);
+
   // | ------------------ Additional functions ------------------ |
 
   void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string& robot_name);
@@ -323,6 +330,52 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
     if (rh.sh_system_health_info.newMsg())
       parseSystemHealthInfo(rh.sh_system_health_info.getMsg(), robot_name);
   }
+}
+
+//}
+
+// --------------------------------------------------------------
+// |                  acition client callbacks                  |
+// --------------------------------------------------------------
+
+/* waypointMissionActiveCallback //{ */
+
+void IROCBridge::waypointMissionActiveCallback(const std::string& robot_name) {
+  ROS_INFO_STREAM("[IROCBridge]: Action server on robot " << robot_name << " is processing the goal.");
+}
+
+//}
+
+/* waypointMissionDoneCallback //{ */
+
+void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const mrs_mission_manager::waypointMissionResultConstPtr& result,
+                                             const std::string& robot_name) {
+  if (result->success) {
+    ROS_INFO_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
+                                                            << result->message << "\"");
+  } else {
+    ROS_ERROR_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
+                                                             << result->message << "\"");
+  }
+  const json json_msg = {
+      {"robot_name", robot_name},
+      {"mission_result", result->message},
+      {"mission_success", result->success},
+  };
+  sendJsonMessage("WaypointMissionDone", json_msg);
+}
+
+//}
+
+/* waypointMissionFeedbackCallback //{ */
+
+void IROCBridge::waypointMissionFeedbackCallback(const mrs_mission_manager::waypointMissionFeedbackConstPtr& feedback, const std::string& robot_name) {
+  ROS_INFO_STREAM("[IROCBridge]: Feedback from " << robot_name << " action: \"" << feedback->message << "\"");
+  const json json_msg = {
+      {"robot_name", robot_name},
+      {"mission_state", feedback->message},
+  };
+  sendJsonMessage("WaypointMissionFeedback", json_msg);
 }
 
 //}
@@ -737,15 +790,26 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   action_goal.terminal_action = terminal_action;
   action_goal.points          = ref_points;
 
-  if (!rh_ptr->action_client_ptr->getState().isDone()) {
-    ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n";
-    ROS_INFO_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+  if (!rh_ptr->action_client_ptr->isServerConnected()) {
+    ss << "Action server is not connected. Check the mrs_mission_manager node.\n";
+    ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the mrs_mission_manager node.");
     res.status = httplib::StatusCode::NotAcceptable_406;
     res.body   = ss.str();
     return;
   }
 
-  rh_ptr->action_client_ptr->sendGoal(action_goal);
+  if (!rh_ptr->action_client_ptr->getState().isDone()) {
+    ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n";
+    ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body   = ss.str();
+    return;
+  }
+
+  rh_ptr->action_client_ptr->sendGoal(
+      action_goal, std::bind(&IROCBridge::waypointMissionDoneCallback, this, std::placeholders::_1, std::placeholders::_2, rh_ptr->robot_name),
+      std::bind(&IROCBridge::waypointMissionActiveCallback, this, rh_ptr->robot_name),
+      std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, rh_ptr->robot_name));
 
   ss << "set a path with " << points.size() << " length for robot \"" << robot_name << "\"";
   ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
