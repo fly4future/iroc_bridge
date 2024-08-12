@@ -774,6 +774,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     res.body   = ss.str();
     return;
   }
+  ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Mission for Robot: \"" << robot_name << "\" Calling mission...");
 
   std::vector<mrs_msgs::Reference> ref_points;
   ref_points.reserve(points.size());
