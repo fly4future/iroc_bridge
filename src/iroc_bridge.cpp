@@ -371,16 +371,20 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
 void IROCBridge::waypointMissionFeedbackCallback(const mrs_mission_manager::waypointMissionFeedbackConstPtr& feedback, const std::string& robot_name) {
   ROS_INFO_STREAM("[IROCBridge]: Feedback from " << robot_name << " action: \"" << feedback->message << "\"" << " goal_idx: " << feedback->goal_idx
-                                                 << " distance_to_closest_goal: " << feedback->distance_to_closest_goal << " goal_progress: " << feedback->goal_progress
-                                                 << " distance_to_finish: " << feedback->distance_to_finish << " mission_progress: " << feedback->mission_progress);
+                                                 << " distance_to_closest_goal: " << feedback->distance_to_closest_goal << " goal_estimated_arrival_time: "
+                                                 << feedback->goal_estimated_arrival_time << " goal_progress: " << feedback->goal_progress
+                                                 << " distance_to_finish: " << feedback->distance_to_finish << " finish_estimated_arrival_time: " 
+                                                 << feedback->finish_estimated_arrival_time  << " mission_progress: " << feedback->mission_progress);
   
   const json json_msg = {
       {"robot_name", robot_name},
       {"mission_state", feedback->message},
       {"current_goal", feedback->goal_idx},
       {"distance_to_goal", feedback->distance_to_closest_goal},
+      {"goal_estimated_arrival_time", feedback->goal_estimated_arrival_time},
       {"goal_progress", feedback->goal_progress},
       {"distance_to_finish", feedback->distance_to_finish},
+      {"finish_estimated_arrival_time", feedback->finish_estimated_arrival_time},
       {"mission_progress", feedback->mission_progress},
   };
   sendJsonMessage("WaypointMissionFeedback", json_msg);
