@@ -397,7 +397,7 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
            {"wh_drained", general_robot_info->battery_state.wh_drained},
        }},
       {"ready_to_start", general_robot_info->ready_to_start},
-      {"problem_preventing_start", general_robot_info->problem_preventing_start},
+      {"problems_preventing_start", general_robot_info->problems_preventing_start},
   };
   sendJsonMessage("GeneralRobotInfo", json_msg);
 }
