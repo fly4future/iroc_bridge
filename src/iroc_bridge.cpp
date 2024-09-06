@@ -374,20 +374,31 @@ void IROCBridge::waypointMissionActiveCallback(const std::string& robot_name) {
 /* waypointMissionDoneCallback //{ */
 
 void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const mrs_mission_manager::waypointMissionResultConstPtr& result,
-                                             const std::string& robot_name) {
-  if (result->success) {
-    ROS_INFO_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
-                                                            << result->message << "\"");
+    const std::string& robot_name) {
+  if (result == NULL) {
+    ROS_WARN("[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was restarted need to upload a new mission!");
+    const json json_msg = {
+      {"robot_name", robot_name},
+      {"mission_result", "Mission manager died in ongoing mission"},
+      {"mission_success", false},
+    };
+    sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
-    ROS_ERROR_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
-                                                             << result->message << "\"");
-  }
-  const json json_msg = {
+    if (result->success) {
+      ROS_INFO_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
+          << result->message << "\"");
+    } else {
+      ROS_ERROR_STREAM("[IROCBridge]: Action server on robot " << robot_name << " finished with state: \"" << state.toString() << "\". Result message is: \""
+          << result->message << "\"");
+    }
+
+    const json json_msg = {
       {"robot_name", robot_name},
       {"mission_result", result->message},
       {"mission_success", result->success},
-  };
-  sendJsonMessage("WaypointMissionDone", json_msg);
+    };
+    sendJsonMessage("WaypointMissionDone", json_msg);
+  }
 }
 
 //}
