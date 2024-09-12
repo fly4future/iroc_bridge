@@ -800,10 +800,11 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   }
 
   int         frame_id;
+  int         height_id;
   int         terminal_action;
   std::string robot_name;
   json        points;
-  const auto  succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"points", &points}, {"terminal_action", &terminal_action}});
+  const auto  succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"height_id", &height_id}, {"points", &points}, {"terminal_action", &terminal_action}});
   if (!succ)
     return;
 
@@ -836,6 +837,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   }
   ActionServerGoal action_goal;
   action_goal.frame_id        = frame_id;
+  action_goal.height_id       = height_id;
   action_goal.terminal_action = terminal_action;
   action_goal.points          = ref_points;
 
