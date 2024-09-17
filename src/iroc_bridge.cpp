@@ -1060,7 +1060,7 @@ void IROCBridge::landCallback(const httplib::Request& req, httplib::Response& re
 
 /* landHomeCallback() method //{ */
 void IROCBridge::landHomeCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a takeoff message JSON -> ROS.");
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a landHome message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
   try {
@@ -1126,7 +1126,7 @@ void IROCBridge::landAllCallback(const httplib::Request& req, httplib::Response&
 
 /* landHomeAllCallback() method //{ */
 void IROCBridge::landHomeAllCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received land all request.");
+  ROS_INFO_STREAM("[IROCBridge]: Received landHome all request.");
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
