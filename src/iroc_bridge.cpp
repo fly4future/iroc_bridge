@@ -89,6 +89,7 @@ private:
     ros::ServiceClient sc_land;
     ros::ServiceClient sc_land_home;
     ros::ServiceClient sc_mission_activation;
+    ros::ServiceClient sc_mission_pausing;
 
     std::unique_ptr<MissionManagerClient> action_client_ptr;
 
@@ -309,6 +310,10 @@ void IROCBridge::onInit() {
 
       robot_handler.sc_mission_activation = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_activation"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_activation\' -> \'%s\'", robot_handler.sc_mission_activation.getService().c_str());
+
+      robot_handler.sc_mission_pausing = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_pausing"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+
 
       // | ----------------------- publishers ----------------------- |
       robot_handler.pub_path = nh_.advertise<mrs_msgs::Path>("/" + robot_name + nh_.resolveName("out/path"), 2);
@@ -962,7 +967,23 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
         ss << "robot " << robot_name << " not found, skipping\n";
         ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot " << robot_name << " not found. Skipping.");
       }
-    }
+    } 
+
+  } else if (type == "pause") {
+    ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission pausing.");
+    for (const auto& robot_name : robot_names) {
+      auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+      if (rh_ptr != nullptr) {
+        const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_mission_pausing);
+        if (!resp.success) {
+          ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        }
+      } else {
+        ss << "robot " << robot_name << " not found, skipping\n";
+        ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot " << robot_name << " not found. Skipping.");
+      }
+    } 
+
   } else if (type == "stop") {
     ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission stop.");
     for (const auto& robot_name : robot_names) {
