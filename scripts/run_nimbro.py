@@ -117,6 +117,8 @@ class Task:
                                                                     int(TOPIC_START_PORT) + int(this_uav_last_item_in_ip_address))
                     # args = '_sender_destination_addr:={} _sender_port:={} _receiver_port:={}'.format(str(robot_names_list[i]), 
                                                                     # int(TOPIC_START_PORT) + int(this_uav_last_item_in_ip_address), int(TOPIC_START_PORT) + int(last_item_in_ip_address))
+                    destination_addr= str(robot_names_list[i])
+                    sender_port = int(TOPIC_START_PORT) + int(this_uav_last_item_in_ip_address)
                     receiver_port = int(TOPIC_START_PORT) + int(last_item_in_ip_address)
                     # args = None
                     # rosparam load
@@ -139,12 +141,14 @@ class Task:
                                 new_topic = copy.copy(topic)
                                 #  check if the namespace of UAV should be added
                                 if topic['name'][0] != '/':
-                                    new_topic['name'] = ''.join(['/', hostname, '/', topic['name']])
+                                    new_topic['name'] = ''.join(['/', robot_names_list[i], '/', topic['name']])
                                 
                                 udp_topics.append(new_topic)
                                 rospy.loginfo("adding new topic!")
                                 
                             rosparam.upload_params(param_ns, {'sender/udp_topics' : udp_topics})
+                            rosparam.upload_params(param_ns, {'sender/destination_addr' : destination_addr})
+                            rosparam.upload_params(param_ns, {'sender/port' : sender_port})
                             rosparam.upload_params(param_ns, {'receiver/port' : receiver_port})
                             has_params = True
 
