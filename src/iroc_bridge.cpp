@@ -25,6 +25,11 @@
 /* custom msgs of MRS group */
 #include <mrs_msgs/Path.h>
 
+#include <mrs_msgs/SetSafetyAreaSrv.h>
+#include <mrs_msgs/SetSafetyAreaSrvRequest.h>
+#include <mrs_msgs/SetSafetyAreaSrvResponse.h>
+
+
 #include <mrs_robot_diagnostics/GeneralRobotInfo.h>
 #include <mrs_robot_diagnostics/StateEstimationInfo.h>
 #include <mrs_robot_diagnostics/ControlInfo.h>
@@ -131,8 +136,10 @@ private:
   result_t landAction(const std::vector<std::string>& robot_names);
   result_t hoverAction(const std::vector<std::string>& robot_names);
   result_t landHomeAction(const std::vector<std::string>& robot_names);
+  result_t setSafetyBorderAction(const std::vector<std::string>& robot_names); 
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
+  void setSafetyBorderCallback(const httplib::Request&, httplib::Response& res);
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
   void changeMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void takeoffCallback(const httplib::Request&, httplib::Response& res);
@@ -231,6 +238,10 @@ void IROCBridge::onInit() {
 
   const httplib::Server::Handler hdlr_set_path = std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_path", hdlr_set_path);
+
+  const httplib::Server::Handler hdlr_set_safety_area =
+      std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post("/set_safety_border", hdlr_set_safety_area);
 
   const httplib::Server::Handler hdlr_set_waypoint_mission =
       std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
@@ -807,6 +818,35 @@ IROCBridge::result_t IROCBridge::landHomeAction(const std::vector<std::string>& 
 }
 //}
 
+/* setSafetyBorderAction() method //{ */
+IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::string>& robot_names) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  bool              everything_ok = true;
+  std::stringstream ss;
+  ss << "Result:\n";
+
+  // check that all robot names are valid and find the corresponding robot handlers
+  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety border service.");
+  for (const auto& robot_name : robot_names) {
+    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+    if (rh_ptr != nullptr) {
+      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_land_home);
+      if (!resp.success) {
+        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        everything_ok = false;
+      }
+    } else {
+      ss << "robot \"" << robot_name << "\" not found, skipping\n";
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      everything_ok = false;
+    }
+  }
+
+  return {everything_ok, ss.str()};
+}
+//}
+
 // --------------------------------------------------------------
 // |                     REST API callbacks                     |
 // --------------------------------------------------------------
@@ -873,6 +913,68 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
   res.status = httplib::StatusCode::Accepted_202;
   res.body   = ss.str();
 }
+//}
+
+/* setSafetyBorderCallback() method //{ */
+void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::Response& res) {
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a setSafetyBorderCallback message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
+  json json_msg;
+  try {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
+  }
+
+  std::string units;
+  int         origin_x;
+  int         origin_y;
+  bool        enabled;
+  std::string horizontal_frame;
+  std::string vertical_frame;
+  json        points;
+  int         max_z;
+  int         min_z;
+
+  const auto  succ = parse_vars(json_msg, {
+      {"units", &units}, 
+      {"origin_x", &origin_x}, 
+      {"origin_y", &origin_y}, 
+      {"enabled", &enabled}, 
+      {"horizontal_frame", &horizontal_frame}, 
+      {"vertical_frame", &vertical_frame}, 
+      {"points", &points}, 
+      {"max_z", &max_z}, 
+      {"min_z", &min_z}
+   });
+  
+  if (!succ)
+    return;
+
+  if (!points.is_array()) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    return;
+  }
+
+  mrs_msgs::SafetyArea safety_area_msg;
+
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  robot_names.reserve(robot_handlers_.handlers.size());
+  for (const auto& rh : robot_handlers_.handlers)
+    robot_names.push_back(rh.robot_name);
+
+  
+  const auto result = landHomeAction(robot_names);
+
+  res.status = httplib::StatusCode::Accepted_202;
+  res.body   = result.message;
+
+
+  }
 //}
 
 /* waypointMissionCallback() method //{ */
