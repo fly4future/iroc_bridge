@@ -62,6 +62,7 @@
       <remap from="~svc/mission_activation" to="/mission_manager/mission_activation" />
       <remap from="~svc/mission_pausing" to="/mission_manager/mission_pausing" />
       <remap from="~svc/set_safety_area" to="/safety_area_manager/set_safety_area" />
+      <remap from="~svc/set_obstacle" to="/safety_area_manager/set_obstacle" />
 
       <!-- Services -->
       <remap from="~ac/waypoint_mission" to="/mission_manager" />

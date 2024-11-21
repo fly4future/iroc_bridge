@@ -29,6 +29,9 @@
 #include <mrs_msgs/SetSafetyAreaSrvRequest.h>
 #include <mrs_msgs/SetSafetyAreaSrvResponse.h>
 
+#include <mrs_msgs/SetObstacleSrv.h>
+#include <mrs_msgs/SetObstacleSrvRequest.h>
+#include <mrs_msgs/SetObstacleSrvResponse.h>
 
 #include <mrs_robot_diagnostics/GeneralRobotInfo.h>
 #include <mrs_robot_diagnostics/StateEstimationInfo.h>
@@ -95,6 +98,7 @@ private:
     ros::ServiceClient sc_hover;
     ros::ServiceClient sc_land_home;
     ros::ServiceClient sc_set_safety_area;
+    ros::ServiceClient sc_set_obstacle;
     ros::ServiceClient sc_mission_activation;
     ros::ServiceClient sc_mission_pausing;
 
@@ -138,9 +142,11 @@ private:
   result_t hoverAction(const std::vector<std::string>& robot_names);
   result_t landHomeAction(const std::vector<std::string>& robot_names);
   result_t setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyArea& msg); 
+  result_t setObstacleAction(const std::vector<std::string>& robot_names, const mrs_msgs::SetObstacleSrvRequest& req); 
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
   void setSafetyBorderCallback(const httplib::Request&, httplib::Response& res);
+  void setObstacleCallback(const httplib::Request&, httplib::Response& res);
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
   void changeMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void takeoffCallback(const httplib::Request&, httplib::Response& res);
@@ -244,6 +250,10 @@ void IROCBridge::onInit() {
       std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_safety_border", hdlr_set_safety_area);
 
+  const httplib::Server::Handler hdlr_set_obstacle =
+      std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post("/set_obstacle", hdlr_set_obstacle);
+
   const httplib::Server::Handler hdlr_set_waypoint_mission =
       std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_waypoint_mission", hdlr_set_waypoint_mission);
@@ -341,6 +351,10 @@ void IROCBridge::onInit() {
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyAreaSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+
+      robot_handler.sc_set_obstacle = nh_.serviceClient<mrs_msgs::SetObstacleSrv>("/" + robot_name + nh_.resolveName("svc/set_obstacle"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+
 
       // | ----------------------- publishers ----------------------- |
       robot_handler.pub_path = nh_.advertise<mrs_msgs::Path>("/" + robot_name + nh_.resolveName("out/path"), 2);
@@ -853,6 +867,36 @@ IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::st
 }
 //}
 
+/* setObstacleAction() method //{ */
+IROCBridge::result_t IROCBridge::setObstacleAction(const std::vector<std::string>& robot_names, const mrs_msgs::SetObstacleSrvRequest& req) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  bool              everything_ok = true;
+  std::stringstream ss;
+  ss << "Result:\n";
+
+  // check that all robot names are valid and find the corresponding robot handlers
+
+  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety border service.");
+  for (const auto& robot_name : robot_names) {
+    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+    if (rh_ptr != nullptr) {
+      const auto resp = callService<mrs_msgs::SetObstacleSrv>(rh_ptr->sc_set_obstacle, req);
+      if (!resp.success) {
+        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+        everything_ok = false;
+      }
+    } else {
+      ss << "robot \"" << robot_name << "\" not found, skipping\n";
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      everything_ok = false;
+    }
+  }
+
+  return {everything_ok, ss.str()};
+}
+//}
+
 // --------------------------------------------------------------
 // |                     REST API callbacks                     |
 // --------------------------------------------------------------
@@ -923,6 +967,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
 
 /* setSafetyBorderCallback() method //{ */
 void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::Response& res) {
+
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setSafetyBorderCallback message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
@@ -1014,6 +1059,80 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   }
 //}
 
+/* setObstacleCallback() method //{ */
+void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Response& res) {
+  
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
+  json json_msg;
+  try {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
+  }
+
+  std::string horizontal_frame;
+  std::string vertical_frame;
+  json        points;
+  int         max_z;
+  int         min_z;
+
+  const auto  succ = parse_vars(json_msg, {
+      {"horizontal_frame", &horizontal_frame}, 
+      {"vertical_frame", &vertical_frame}, 
+      {"points", &points}, 
+      {"max_z", &max_z}, 
+      {"min_z", &min_z}
+   });
+  
+  if (!succ)
+    return;
+
+  if (!points.is_array()) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    return;
+  }
+
+  std::vector<mrs_msgs::Point2D> border_points;
+  border_points.reserve(points.size());
+
+  for (const auto& el : points) {
+    mrs_msgs::Point2D pt;
+    const auto          succ = parse_vars(el, {{"x", &pt.x}, {"y", &pt.y}});
+    if (!succ)
+      return;
+    border_points.push_back(pt);
+  }
+
+  ROS_INFO("[IROCBridge]: Obstacle border points size %zu ", border_points.size());
+
+  mrs_msgs::SetObstacleSrvRequest obstacle_req;
+
+  obstacle_req.horizontal_frame = horizontal_frame;
+  obstacle_req.vertical_frame   = vertical_frame;
+  obstacle_req.points           = border_points;
+  obstacle_req.max_z            = max_z;
+  obstacle_req.min_z            = min_z;
+
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  robot_names.reserve(robot_handlers_.handlers.size());
+  for (const auto& rh : robot_handlers_.handlers)
+    robot_names.push_back(rh.robot_name);
+
+  
+  const auto result = setObstacleAction(robot_names, obstacle_req);
+
+  res.status = httplib::StatusCode::Accepted_202;
+  res.body   = result.message;
+
+
+  }
+//}
+
 /* waypointMissionCallback() method //{ */
 void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::Response& res) {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a waypointMissionCallback message JSON -> ROS.");
@@ -1090,6 +1209,8 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
       std::bind(&IROCBridge::waypointMissionActiveCallback, this, rh_ptr->robot_name),
       std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, rh_ptr->robot_name));
 
+  //TODO
+  /* rh_ptr->action_client_ptr->waitForResult(); */
   ss << "set a path with " << points.size() << " length for robot \"" << robot_name << "\"";
   ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
   res.status = httplib::StatusCode::Accepted_202;
