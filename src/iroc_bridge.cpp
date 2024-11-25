@@ -1052,9 +1052,14 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   
   const auto result = setSafetyBorderAction(robot_names, safety_area_msg);
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-
+  if (result.success) {
+    res.status = httplib::StatusCode::Accepted_202;
+    res.body   = result.message;
+    
+  } else {
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body   = result.message;
+  }
 
   }
 //}
@@ -1126,9 +1131,14 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
   
   const auto result = setObstacleAction(robot_names, obstacle_req);
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-
+  if (result.success) {
+    res.status = httplib::StatusCode::Accepted_202;
+    res.body   = result.message;
+    
+  } else {
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body   = result.message;
+  }
 
   }
 //}
