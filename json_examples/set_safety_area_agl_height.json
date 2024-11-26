@@ -1,16 +1,11 @@
 {
-  "units":"LATLON",
-  "origin_x": 47.397743, 
-  "origin_y": 8.545594, 
-  "enabled": true, 
-  "horizontal_frame": "latlon_origin", 
-  "vertical_frame": "world_origin", 
   "points": [
     {"x": 47.398283, "y": 8.54232},
     {"x": 47.397967, "y": 8.546442},
     {"x": 47.397298, "y": 8.546021},
     {"x": 47.397581, "y": 8.544710}
   ],
+  "height_id": 0, 
   "max_z": 15.4,
   "min_z": 0.5
 }

@@ -982,20 +982,23 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   std::string units;
   int         origin_x;
   int         origin_y;
-  bool        enabled;
-  std::string horizontal_frame;
+  //Defined default as true
+  bool        enabled = true;
+  //Defined to be latlon origin by default, as for the UI perspective it makes more sense
+  std::string horizontal_frame = "latlon_origin";
   std::string vertical_frame;
+  int         height_id;
   json        points;
   int         max_z;
   int         min_z;
 
+  std::map<int, std::string> height_id_map = {
+    {0, "world_origin"},
+    {1, "latlon_origin"},
+  };
+  
   const auto  succ = parse_vars(json_msg, {
-      {"units", &units}, 
-      {"origin_x", &origin_x}, 
-      {"origin_y", &origin_y}, 
-      {"enabled", &enabled}, 
-      {"horizontal_frame", &horizontal_frame}, 
-      {"vertical_frame", &vertical_frame}, 
+      {"height_id", &height_id}, 
       {"points", &points}, 
       {"max_z", &max_z}, 
       {"min_z", &min_z}
@@ -1006,7 +1009,20 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
 
   if (!points.is_array()) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body = "Bad points input: Expected an array";
     return;
+  }
+
+  //Map the received id and save it into the corresponding vertical frame string
+  auto it = height_id_map.find(height_id);
+  if (it != height_id_map.end()) {
+    vertical_frame = it->second;
+  } else {
+      ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+      res.status = httplib::StatusCode::NotAcceptable_406;
+      res.body = "Unknown height_id";
+      return;
   }
 
   std::vector<mrs_msgs::Point2D> border_points;
@@ -1078,15 +1094,21 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
     return;
   }
 
-  std::string horizontal_frame;
+  //Defined to be latlon origin by default, as for the UI perspective it makes more sense
+  std::string horizontal_frame = "latlon_origin";
   std::string vertical_frame;
   json        points;
+  int         height_id;
   int         max_z;
   int         min_z;
 
+  std::map<int, std::string> height_id_map = {
+    {0, "world_origin"},
+    {1, "latlon_origin"},
+  };
+
   const auto  succ = parse_vars(json_msg, {
-      {"horizontal_frame", &horizontal_frame}, 
-      {"vertical_frame", &vertical_frame}, 
+      {"height_id", &height_id}, 
       {"points", &points}, 
       {"max_z", &max_z}, 
       {"min_z", &min_z}
@@ -1097,7 +1119,20 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
 
   if (!points.is_array()) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    res.status = httplib::StatusCode::NotAcceptable_406;
+    res.body = "Bad points input: Expected an array";
     return;
+  }
+
+  //Map the received id and save it into the corresponding vertical frame string
+  auto it = height_id_map.find(height_id);
+  if (it != height_id_map.end()) {
+    vertical_frame = it->second;
+  } else {
+      ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+      res.status = httplib::StatusCode::NotAcceptable_406;
+      res.body = "Unknown height_id";
+      return;
   }
 
   std::vector<mrs_msgs::Point2D> border_points;
