@@ -43,6 +43,7 @@
 #include <mrs_mission_manager/waypointMissionAction.h>
 
 #include "iroc_bridge/json_var_parser.h"
+#include <mrs_robot_diagnostics/parsing_functions.h>
 
 #include <unistd.h>
 #include <iostream>
@@ -61,6 +62,8 @@ using namespace actionlib;
 
 typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction> MissionManagerClient;
 typedef mrs_mission_manager::waypointMissionGoal                       ActionServerGoal;
+
+typedef mrs_robot_diagnostics::robot_type_t     robot_type_t;
 
 /* class IROCBridge //{ */
 
@@ -1195,6 +1198,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   int         height_id;
   int         terminal_action;
   std::string robot_name;
+  int         robot_type_id;
   json        points;
   const auto  succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"height_id", &height_id}, {"points", &points}, {"terminal_action", &terminal_action}});
   if (!succ)
@@ -1215,18 +1219,52 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     res.body   = ss.str();
     return;
   }
-  ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Mission for Robot: \"" << robot_name << "\" Calling mission...");
+
+  auto robot_type =  rh_ptr->sh_general_robot_info.getMsg()->robot_type;
+
 
   std::vector<mrs_msgs::Reference> ref_points;
   ref_points.reserve(points.size());
-  bool use_heading = false;
-  for (const auto& el : points) {
-    mrs_msgs::Reference ref;
-    const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}, {"heading", &ref.heading}});
-    if (!succ)
-      return;
-    ref_points.push_back(ref);
+
+  switch (robot_type){
+
+    case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
+
+      ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
+
+      bool use_heading = false;
+      for (const auto& el : points) {
+          mrs_msgs::Reference ref;
+          const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}, {"heading", &ref.heading}});
+          if (!succ)
+            return;
+          ref_points.push_back(ref);
+      }
+
+     break;
+    };
+
+    case static_cast<uint8_t>(robot_type_t::BOAT): {
+
+      ROS_INFO("[IROCBridge]: BOAT TYPE: ");
+      bool use_heading = false;
+      for (const auto& el : points) {
+        mrs_msgs::Reference ref;
+        const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"heading", &ref.heading}});
+        if (!succ)
+          return;
+        ref_points.push_back(ref);
+      }
+
+    break;
+    };
+    default:
+    break;
+
   }
+
+  ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Mission for Robot: \"" << robot_name << "\" Calling mission...");
+
   ActionServerGoal action_goal;
   action_goal.frame_id        = frame_id;
   action_goal.height_id       = height_id;
