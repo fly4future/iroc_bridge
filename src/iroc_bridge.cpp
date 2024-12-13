@@ -508,6 +508,7 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
        }},
       {"ready_to_start", general_robot_info->ready_to_start},
       {"problems_preventing_start", general_robot_info->problems_preventing_start},
+      {"errors", general_robot_info->errors},
   };
   sendJsonMessage("GeneralRobotInfo", json_msg);
 }
