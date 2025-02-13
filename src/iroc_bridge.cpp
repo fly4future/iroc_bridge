@@ -25,9 +25,9 @@
 /* custom msgs of MRS group */
 #include <mrs_msgs/Path.h>
 
-#include <mrs_msgs/SetSafetyAreaSrv.h>
-#include <mrs_msgs/SetSafetyAreaSrvRequest.h>
-#include <mrs_msgs/SetSafetyAreaSrvResponse.h>
+#include <mrs_msgs/SetSafetyBorderSrv.h>
+#include <mrs_msgs/SetSafetyBorderSrvRequest.h>
+#include <mrs_msgs/SetSafetyBorderSrvResponse.h>
 
 #include <mrs_msgs/SetObstacleSrv.h>
 #include <mrs_msgs/SetObstacleSrvRequest.h>
@@ -144,7 +144,7 @@ private:
   result_t landAction(const std::vector<std::string>& robot_names);
   result_t hoverAction(const std::vector<std::string>& robot_names);
   result_t landHomeAction(const std::vector<std::string>& robot_names);
-  result_t setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyArea& msg); 
+  result_t setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyBorder& msg); 
   result_t setObstacleAction(const std::vector<std::string>& robot_names, const mrs_msgs::SetObstacleSrvRequest& req); 
 
   void pathCallback(const httplib::Request&, httplib::Response& res);
@@ -352,7 +352,7 @@ void IROCBridge::onInit() {
       robot_handler.sc_mission_pausing = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_pausing"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
-      robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyAreaSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
+      robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
       robot_handler.sc_set_obstacle = nh_.serviceClient<mrs_msgs::SetObstacleSrv>("/" + robot_name + nh_.resolveName("svc/set_obstacle"));
@@ -840,7 +840,7 @@ IROCBridge::result_t IROCBridge::landHomeAction(const std::vector<std::string>& 
 //}
 
 /* setSafetyBorderAction() method //{ */
-IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyArea& msg) {
+IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyBorder& msg) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   bool              everything_ok = true;
@@ -848,14 +848,14 @@ IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::st
   ss << "Result:\n";
 
   // check that all robot names are valid and find the corresponding robot handlers
-  mrs_msgs::SetSafetyAreaSrvRequest req;
-  req.safety_area = msg;
+  mrs_msgs::SetSafetyBorderSrvRequest req;
+  req.safety_border = msg;
 
   ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety border service.");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      const auto resp = callService<mrs_msgs::SetSafetyAreaSrv>(rh_ptr->sc_set_safety_area, req);
+      const auto resp = callService<mrs_msgs::SetSafetyBorderSrv>(rh_ptr->sc_set_safety_area, req);
       if (!resp.success) {
         ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
         everything_ok = false;
@@ -881,7 +881,7 @@ IROCBridge::result_t IROCBridge::setObstacleAction(const std::vector<std::string
 
   // check that all robot names are valid and find the corresponding robot handlers
 
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety border service.");
+  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety obstacle service.");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
@@ -1042,13 +1042,7 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
 
   ROS_INFO("[IROCBridge]: Border points size %zu ", border_points.size());
 
-  mrs_msgs::SafetyArea   safety_area_msg;
   mrs_msgs::SafetyBorder safety_border;
-  mrs_msgs::Obstacles    obstacles;
-
-  safety_area_msg.units          = units;
-  safety_area_msg.origin_x       = origin_x;
-  safety_area_msg.origin_y       = origin_y;
 
   safety_border.enabled          = enabled;
   safety_border.horizontal_frame = horizontal_frame;
@@ -1057,11 +1051,6 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   safety_border.max_z            = max_z;
   safety_border.min_z            = min_z;
 
-  obstacles.present              = false;
-
-  safety_area_msg.border         = safety_border;
-  safety_area_msg.obstacles      = obstacles;
-
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
@@ -1069,8 +1058,7 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   for (const auto& rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
 
-  
-  const auto result = setSafetyBorderAction(robot_names, safety_area_msg);
+  const auto result = setSafetyBorderAction(robot_names, safety_border);
 
   if (result.success) {
     res.status = httplib::StatusCode::Accepted_202;
