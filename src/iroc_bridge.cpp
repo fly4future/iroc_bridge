@@ -173,6 +173,8 @@ private:
 
   std::thread th_death_check_;
   void        routine_death_check();
+
+  bool active_border_callback_;
 };
 //}
 
@@ -972,6 +974,8 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
 /* setSafetyBorderCallback() method //{ */
 void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::Response& res) {
 
+  active_border_callback_ = true;
+
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setSafetyBorderCallback message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
@@ -1069,11 +1073,17 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
     res.body   = result.message;
   }
 
+  active_border_callback_ = false;
+
   }
 //}
 
 /* setObstacleCallback() method //{ */
 void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Response& res) {
+
+  if (active_border_callback_) {
+    return;
+  }
   
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
