@@ -41,6 +41,9 @@
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 
 #include <mrs_mission_manager/waypointMissionAction.h>
+#include <iroc_mission_management/WaypointMissionManagementAction.h>
+#include <iroc_mission_management/WaypointMissionRobot.h>
+#include <iroc_mission_management/WaypointMissionInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
 #include <mrs_robot_diagnostics/parsing_functions.h>
@@ -61,7 +64,9 @@ using vec4_t = Eigen::Vector4d;
 using namespace actionlib;
 
 typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction> MissionManagerClient;
+typedef SimpleActionClient<iroc_mission_management::WaypointMissionManagementAction> WaypointMissionManagementClient;
 typedef mrs_mission_manager::waypointMissionGoal                       ActionServerGoal;
+typedef iroc_mission_management::WaypointMissionManagementGoal                       MissionManagementActionServerGoal;
 
 typedef mrs_robot_diagnostics::robot_type_t     robot_type_t;
 
@@ -1193,39 +1198,52 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     return;
   }
 
-  int         frame_id;
-  int         height_id;
-  int         terminal_action;
-  std::string robot_name;
-  int         robot_type_id;
-  json        points;
-  const auto  succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"height_id", &height_id}, {"points", &points}, {"terminal_action", &terminal_action}});
+  json        robots;
+  const auto  succ = parse_vars(json_msg, {{"robots", &robots}});
   if (!succ)
     return;
 
-  if (!points.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+  if (!robots.is_array()) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad robots input: Expected an array.");
     return;
   }
 
-  std::stringstream ss;
-  std::scoped_lock  lck(robot_handlers_.mtx);
-  auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-  if (!rh_ptr) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
-    ss << "robot \"" << robot_name << "\" not found, ignoring";
-    res.status = httplib::StatusCode::BadRequest_400;
-    res.body   = ss.str();
-    return;
-  }
+  std::vector<iroc_mission_management::WaypointMissionRobot> mission_robots;
+  mission_robots.reserve(robots.size());
+  
+  for (const auto& robot : robots ) {
+    iroc_mission_management::WaypointMissionRobot mission_robot;
+    int         frame_id;
+    int         height_id;
+    int         terminal_action;
+    std::string robot_name;
+    json        points;
+    const auto  succ = parse_vars(robot, 
+        {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"height_id", &height_id}, {"points", &points}, {"terminal_action", &terminal_action}});
+    if (!succ)
+      return;
+    if (!points.is_array()) {
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+      return;
+    }
 
-  auto robot_type =  rh_ptr->sh_general_robot_info.getMsg()->robot_type;
+    std::stringstream ss;
+    std::scoped_lock  lck(robot_handlers_.mtx);
+    auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
 
+    if (!rh_ptr) {
+      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+      ss << "robot \"" << robot_name << "\" not found, ignoring";
+      res.status = httplib::StatusCode::BadRequest_400;
+      res.body   = ss.str();
+      return;
+    }
 
-  std::vector<mrs_msgs::Reference> ref_points;
-  ref_points.reserve(points.size());
+    auto robot_type =  rh_ptr->sh_general_robot_info.getMsg()->robot_type;
+    std::vector<mrs_msgs::Reference> ref_points;
+    ref_points.reserve(points.size());
 
-  switch (robot_type){
+    switch (robot_type){
 
     case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
 
@@ -1260,43 +1278,52 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     default:
     break;
 
+    }
+  
+    mission_robot.frame_id        = frame_id;
+    mission_robot.height_id       = height_id; 
+    mission_robot.points          = ref_points;
+    mission_robot.terminal_action = terminal_action;
+
+    mission_robots.push_back(mission_robot);
   }
 
-  ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Mission for Robot: \"" << robot_name << "\" Calling mission...");
+  
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Mission for Robot: \"" << robot_name << "\" Calling mission..."); */
 
-  ActionServerGoal action_goal;
-  action_goal.frame_id        = frame_id;
-  action_goal.height_id       = height_id;
-  action_goal.terminal_action = terminal_action;
-  action_goal.points          = ref_points;
+  /* ActionServerGoal action_goal; */
+  /* action_goal.frame_id        = frame_id; */
+  /* action_goal.height_id       = height_id; */
+  /* action_goal.terminal_action = terminal_action; */
+  /* action_goal.points          = ref_points; */
 
-  if (!rh_ptr->action_client_ptr->isServerConnected()) {
-    ss << "Action server is not connected. Check the mrs_mission_manager node.\n";
-    ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the mrs_mission_manager node.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = ss.str();
-    return;
-  }
+  /* if (!rh_ptr->action_client_ptr->isServerConnected()) { */
+  /*   ss << "Action server is not connected. Check the mrs_mission_manager node.\n"; */
+  /*   ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the mrs_mission_manager node."); */
+  /*   res.status = httplib::StatusCode::NotAcceptable_406; */
+  /*   res.body   = ss.str(); */
+  /*   return; */
+  /* } */
 
-  if (!rh_ptr->action_client_ptr->getState().isDone()) {
-    ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n";
-    ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = ss.str();
-    return;
-  }
+  /* if (!rh_ptr->action_client_ptr->getState().isDone()) { */
+  /*   ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n"; */
+  /*   ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished."); */
+  /*   res.status = httplib::StatusCode::NotAcceptable_406; */
+  /*   res.body   = ss.str(); */
+  /*   return; */
+  /* } */
 
-  rh_ptr->action_client_ptr->sendGoal(
-      action_goal, std::bind(&IROCBridge::waypointMissionDoneCallback, this, std::placeholders::_1, std::placeholders::_2, rh_ptr->robot_name),
-      std::bind(&IROCBridge::waypointMissionActiveCallback, this, rh_ptr->robot_name),
-      std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, rh_ptr->robot_name));
+  /* rh_ptr->action_client_ptr->sendGoal( */
+  /*     action_goal, std::bind(&IROCBridge::waypointMissionDoneCallback, this, std::placeholders::_1, std::placeholders::_2, rh_ptr->robot_name), */
+  /*     std::bind(&IROCBridge::waypointMissionActiveCallback, this, rh_ptr->robot_name), */
+  /*     std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, rh_ptr->robot_name)); */
 
-  //TODO
-  /* rh_ptr->action_client_ptr->waitForResult(); */
-  ss << "set a path with " << points.size() << " length for robot \"" << robot_name << "\"";
-  ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length.");
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = ss.str();
+  /* //TODO */
+  /* /1* rh_ptr->action_client_ptr->waitForResult(); *1/ */
+  /* ss << "set a path with " << points.size() << " length for robot \"" << robot_name << "\""; */
+  /* ROS_INFO_STREAM("[IROCBridge]: Set a path with " << points.size() << " length."); */
+  /* res.status = httplib::StatusCode::Accepted_202; */
+  /* res.body   = ss.str(); */
 }
 //}
 

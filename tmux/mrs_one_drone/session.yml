@@ -36,6 +36,10 @@ windows:
           custom_config:=./config/custom_config.yaml
           world_config:=./config/world_config.yaml
           network_config:=./config/network_config.yaml
+  - safety_area_manager:
+      layout: tiled
+      panes:
+        - waitForControl; roslaunch mrs_uav_managers safety_area_manager.launch world_config:=./config/test_world.yaml
   - robot_diagnostics:
       layout: tiled
       panes:
@@ -57,7 +61,7 @@ windows:
   - mission_commands:
       layout: tiled
       panes:
-        - history -s "curl -v -d \"@../../json_examples/waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
+        - history -s "curl -v -d \"@../../json_examples/new_waypoint_mission.json\" -X POST http://localhost:8080/set_waypoint_mission"; 
           history -s "curl -v -d \"@../../json_examples/change_mission_state.json\" -X POST http://localhost:8080/change_mission_state"
   - rviz:
       layout: tiled

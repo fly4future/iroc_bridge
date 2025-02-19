@@ -14,6 +14,7 @@ set(CATKIN_DEPENDENCIES
   mrs_robot_diagnostics
   mrs_lib
   mrs_mission_manager
+  iroc_mission_management 
   actionlib
   )
 
