@@ -1,5 +1,5 @@
 {
-  "robots": [
+  "mission": [
     {
       "robot_name": "uav1",
       "frame_id": 0,
