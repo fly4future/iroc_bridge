@@ -484,8 +484,17 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
 void IROCBridge::waypointMissionFeedbackCallback(const iroc_mission_management::WaypointMissionManagementFeedbackConstPtr& feedback, const std::vector<iroc_mission_management::WaypointMissionRobot>& robots) {
  
-  ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message); 
-                                                 
+  ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress); 
+
+  auto robots_feedback = feedback->info.robots_feedback; 
+
+  for (const auto& rfb : robots_feedback) {
+    ROS_INFO_STREAM("[IROCBridge]: Feedback from " << rfb.name << " action: \"" << rfb.message << "\"" << " goal_idx: " << rfb.goal_idx 
+                                                 << " distance_to_closest_goal: " << rfb.distance_to_closest_goal << " goal_estimated_arrival_time: "
+                                                 << rfb.goal_estimated_arrival_time << " goal_progress: " << rfb.goal_progress
+                                                 << " distance_to_finish: " << rfb.distance_to_finish << " finish_estimated_arrival_time: " 
+                                                 << rfb.finish_estimated_arrival_time  << " mission_progress: " << rfb.mission_progress); 
+  }
   /* const json json_msg = { */
   /*     {"robot_name", robot_name}, */
   /*     {"mission_state", feedback->message}, */
