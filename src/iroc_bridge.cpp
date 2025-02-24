@@ -25,6 +25,8 @@
 /* custom msgs of MRS group */
 #include <mrs_msgs/Path.h>
 
+#include <mrs_msgs/String.h>
+
 #include <mrs_msgs/SetSafetyBorderSrv.h>
 #include <mrs_msgs/SetSafetyBorderSrvRequest.h>
 #include <mrs_msgs/SetSafetyBorderSrvResponse.h>
@@ -125,6 +127,9 @@ private:
 
   ros::Timer timer_main_;
   void       timerMain(const ros::TimerEvent& event);
+
+  // | ----------------------- ROS Clients ----------------------- |
+  ros::ServiceClient sc_change_mission_state;
 
   // | ----------------- action client callbacks ---------------- |
 
@@ -379,6 +384,8 @@ void IROCBridge::onInit() {
     }
   }
 
+  sc_change_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_mission_state"));
+
   /* // | --------------------- action clients --------------------- | */
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
   action_client_ptr_                = std::make_unique<WaypointMissionManagementClient>(waypoint_action_client_topic, false);
@@ -484,17 +491,18 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
 void IROCBridge::waypointMissionFeedbackCallback(const iroc_mission_management::WaypointMissionManagementFeedbackConstPtr& feedback, const std::vector<iroc_mission_management::WaypointMissionRobot>& robots) {
  
-  ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress); 
+  /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress); */ 
 
   auto robots_feedback = feedback->info.robots_feedback; 
 
-  for (const auto& rfb : robots_feedback) {
-    ROS_INFO_STREAM("[IROCBridge]: Feedback from " << rfb.name << " action: \"" << rfb.message << "\"" << " goal_idx: " << rfb.goal_idx 
-                                                 << " distance_to_closest_goal: " << rfb.distance_to_closest_goal << " goal_estimated_arrival_time: "
-                                                 << rfb.goal_estimated_arrival_time << " goal_progress: " << rfb.goal_progress
-                                                 << " distance_to_finish: " << rfb.distance_to_finish << " finish_estimated_arrival_time: " 
-                                                 << rfb.finish_estimated_arrival_time  << " mission_progress: " << rfb.mission_progress); 
-  }
+  /* for (const auto& rfb : robots_feedback) { */
+  /*   ROS_INFO_STREAM("[IROCBridge]: Feedback from " << rfb.name << " action: \"" << rfb.message << "\"" << " goal_idx: " << rfb.goal_idx */ 
+  /*                                                << " distance_to_closest_goal: " << rfb.distance_to_closest_goal << " goal_estimated_arrival_time: " */
+  /*                                                << rfb.goal_estimated_arrival_time << " goal_progress: " << rfb.goal_progress */
+  /*                                                << " distance_to_finish: " << rfb.distance_to_finish << " finish_estimated_arrival_time: " */ 
+  /*                                                << rfb.finish_estimated_arrival_time  << " mission_progress: " << rfb.mission_progress); */ 
+  /* } */
+
   /* const json json_msg = { */
   /*     {"robot_name", robot_name}, */
   /*     {"mission_state", feedback->message}, */
@@ -1343,27 +1351,34 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 /* changeMissionStateCallback() method //{ */
 void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib::Response& res) {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a changeMissionStateCallback message JSON -> ROS.");
-  /* res.status = httplib::StatusCode::UnprocessableContent_422; */
-  /* json json_msg; */
-  /* try { */
-  /*   json_msg = json::parse(req.body); */
-  /* } */
-  /* catch (const json::exception& e) { */
-  /*   ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what()); */
-  /*   return; */
-  /* } */
 
-  /* std::string type; */
+  res.status = httplib::StatusCode::UnprocessableContent_422;
+  json json_msg;
+  try {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    return;
+  }
 
-  /* json       robot_names; */
-  /* const auto succ = parse_vars(json_msg, {{"type", &type}, {"robot_names", &robot_names}}); */
-  /* if (!succ) */
-  /*   return; */
+  std::string type;
+  json       robot_names;
+  const auto succ = parse_vars(json_msg, {{"type", &type}, {"robot_names", &robot_names}});
+  if (!succ)
+    return;
 
-  /* if (!robot_names.is_array()) { */
-  /*   ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array."); */
-  /*   return; */
-  /* } */
+  if (!robot_names.is_array()) {
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    return;
+  }
+
+  mrs_msgs::String StringSrv;
+  StringSrv.request.value = type;
+
+  
+  sc_change_mission_state.call(StringSrv);
+ 
 
   /* std::stringstream ss; */
   /* std::scoped_lock  lck(robot_handlers_.mtx); */
