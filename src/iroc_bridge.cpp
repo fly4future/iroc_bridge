@@ -385,6 +385,7 @@ void IROCBridge::onInit() {
   }
 
   sc_change_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_mission_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_mission_state\' -> \'%s\'", sc_change_mission_state.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
@@ -1373,12 +1374,17 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
     return;
   }
 
-  mrs_msgs::String StringSrv;
-  StringSrv.request.value = type;
+  std::stringstream ss;
+  mrs_msgs::String::Request string_req;
+  string_req.value = type;
 
-  
-  sc_change_mission_state.call(StringSrv);
- 
+  const auto resp = callService<mrs_msgs::String>(sc_change_mission_state, string_req);
+  if (!resp.success) { 
+          ss << "Mission start service was not successful with message: " << resp.message << "\n";
+  }
+
+  res.status = httplib::StatusCode::Accepted_202;
+  res.body   = ss.str();
 
   /* std::stringstream ss; */
   /* std::scoped_lock  lck(robot_handlers_.mtx); */
@@ -1449,9 +1455,7 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
   /*   res.body   = ss.str(); */
   /*   return; */
   /* } */
-  /* res.status = httplib::StatusCode::Accepted_202; */
-  /* res.body   = ss.str(); */
-}
+  }
 //}
 
 /* takeoffCallback() method //{ */
