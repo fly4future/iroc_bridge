@@ -678,7 +678,7 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_msg) {
   const std::string url          = "/api/robot/telemetry/" + msg_type;
   const std::string body         = json_msg.dump();
-  const std::string content_type = "application/x-www-form-urlencoded";
+  const std::string content_type = "application/json";
   const auto        res          = http_client_->Post(url, body, content_type);
 
   if (res)
