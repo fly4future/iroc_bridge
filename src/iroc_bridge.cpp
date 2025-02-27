@@ -1381,80 +1381,9 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
   if (!resp.success) { 
           ss << "Mission start service was not successful with message: " << resp.message << "\n";
   }
-
   res.status = httplib::StatusCode::Accepted_202;
   res.body   = ss.str();
-
-  /* std::stringstream ss; */
-  /* std::scoped_lock  lck(robot_handlers_.mtx); */
-  /* for (const auto& robot_name : robot_names) { */
-  /*   auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_); */
-  /*   if (!rh_ptr) { */
-  /*     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring."); */
-  /*     ss << "robot \"" << robot_name << "\" not found, ignoring"; */
-  /*     res.status = httplib::StatusCode::BadRequest_400; */
-  /*     res.body   = ss.str(); */
-  /*     return; */
-  /*   } */
-  /* } */
-
-  /* if (type == "start") { */
-  /*   ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission activation."); */
-  /*   for (const auto& robot_name : robot_names) { */
-  /*     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_); */
-  /*     if (rh_ptr != nullptr) { */
-  /*       const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_mission_activation); */
-  /*       if (!resp.success) { */
-  /*         ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n"; */
-  /*       } */
-  /*     } else { */
-  /*       ss << "robot " << robot_name << " not found, skipping\n"; */
-  /*       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot " << robot_name << " not found. Skipping."); */
-  /*     } */
-  /*   } */ 
-
-  /* } else if (type == "pause") { */
-  /*   ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission pausing."); */
-  /*   for (const auto& robot_name : robot_names) { */
-  /*     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_); */
-  /*     if (rh_ptr != nullptr) { */
-  /*       const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_mission_pausing); */
-  /*       if (!resp.success) { */
-  /*         ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n"; */
-  /*       } */
-  /*     } else { */
-  /*       ss << "robot " << robot_name << " not found, skipping\n"; */
-  /*       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot " << robot_name << " not found. Skipping."); */
-  /*     } */
-  /*   } */ 
-
-  /* } else if (type == "stop") { */
-  /*   ROS_INFO_STREAM_THROTTLE(1.0, "Calling mission stop."); */
-  /*   for (const auto& robot_name : robot_names) { */
-  /*     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_); */
-  /*     if (rh_ptr != nullptr) { */
-  /*       const auto action_client_state = rh_ptr->action_client_ptr->getState(); */
-  /*       if (action_client_state.isDone()) { */
-  /*         ss << "robot \"" << robot_name << "\" mission done, skipping\n"; */
-  /*         ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" mission done. Skipping."); */
-  /*       } else { */
-  /*         ROS_INFO_STREAM_THROTTLE(1.0, "[IROCBridge]: Cancelling \"" << robot_name << "\" mission."); */
-  /*         rh_ptr->action_client_ptr->cancelGoal(); */
-  /*       } */
-
-  /*     } else { */
-  /*       ss << "robot \"" << robot_name << "\" not found, skipping\n"; */
-  /*       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping."); */
-  /*     } */
-  /*   } */
-  /* } else { */
-  /*   ss << "Bad \'type\' input: ]'" << type.c_str() << "\'. Supported type are \'start\' and \'stop\'."; */
-  /*   ROS_ERROR_THROTTLE(1.0, "[IROCBridge]: Bad \'type\' input: %s. Supported type are \'start\' and \'stop\'.", type.c_str()); */
-  /*   res.status = httplib::StatusCode::BadRequest_400; */
-  /*   res.body   = ss.str(); */
-  /*   return; */
-  /* } */
-  }
+}
 //}
 
 /* takeoffCallback() method //{ */
