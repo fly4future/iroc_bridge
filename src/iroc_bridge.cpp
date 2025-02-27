@@ -495,27 +495,32 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_mission_management::
   /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress); */ 
 
   auto robots_feedback = feedback->info.robots_feedback; 
+  std::vector<json> json_msgs;
+ 
+  //Collect each robot feedback and create a json for each
+  for (const auto& rfb : robots_feedback) {
+    json json_msg = {
+      {"robot_name", rfb.name},
+      {"message", rfb.message},
+      {"mission_progress", rfb.mission_progress},
+      {"current_goal", rfb.goal_idx},
+      {"distance_to_goal", rfb.distance_to_closest_goal},
+      {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
+      {"goal_progress", rfb.goal_progress},
+      {"distance_to_finish", rfb.distance_to_finish},
+      {"finish_estimated_arrival_time",rfb.finish_estimated_arrival_time },
+    };
+    json_msgs.emplace_back(json_msg);
+  }
 
-  /* for (const auto& rfb : robots_feedback) { */
-  /*   ROS_INFO_STREAM("[IROCBridge]: Feedback from " << rfb.name << " action: \"" << rfb.message << "\"" << " goal_idx: " << rfb.goal_idx */ 
-  /*                                                << " distance_to_closest_goal: " << rfb.distance_to_closest_goal << " goal_estimated_arrival_time: " */
-  /*                                                << rfb.goal_estimated_arrival_time << " goal_progress: " << rfb.goal_progress */
-  /*                                                << " distance_to_finish: " << rfb.distance_to_finish << " finish_estimated_arrival_time: " */ 
-  /*                                                << rfb.finish_estimated_arrival_time  << " mission_progress: " << rfb.mission_progress); */ 
-  /* } */
+  const json json_msg = {
+    {"progress", feedback->info.progress },
+    {"mission_state", feedback->info.state},
+    {"message", feedback->info.message},
+    {"robots", json_msgs}
+  };
 
-  /* const json json_msg = { */
-  /*     {"robot_name", robot_name}, */
-  /*     {"mission_state", feedback->message}, */
-  /*     {"current_goal", feedback->goal_idx}, */
-  /*     {"distance_to_goal", feedback->distance_to_closest_goal}, */
-  /*     {"goal_estimated_arrival_time", feedback->goal_estimated_arrival_time}, */
-  /*     {"goal_progress", feedback->goal_progress}, */
-  /*     {"distance_to_finish", feedback->distance_to_finish}, */
-  /*     {"finish_estimated_arrival_time", feedback->finish_estimated_arrival_time}, */
-  /*     {"mission_progress", feedback->mission_progress}, */
-  /* }; */
-  /* sendJsonMessage("WaypointMissionFeedback", json_msg); */
+  sendJsonMessage("WaypointMissionFeedback", json_msg);
 }
 
 //}
