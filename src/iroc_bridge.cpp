@@ -1364,15 +1364,9 @@ void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib
   }
 
   std::string type;
-  json       robot_names;
-  const auto succ = parse_vars(json_msg, {{"type", &type}, {"robot_names", &robot_names}});
+  const auto succ = parse_vars(json_msg, {{"type", &type}});
   if (!succ)
     return;
-
-  if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
-    return;
-  }
 
   std::stringstream ss;
   mrs_msgs::String::Request string_req;
