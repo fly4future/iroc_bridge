@@ -43,9 +43,9 @@
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 
 #include <mrs_mission_manager/waypointMissionAction.h>
-#include <iroc_mission_management/WaypointMissionManagementAction.h>
-#include <iroc_mission_management/WaypointMissionRobot.h>
-#include <iroc_mission_management/WaypointMissionInfo.h>
+#include <iroc_fleet_manager/WaypointFleetManagerAction.h>
+#include <iroc_fleet_manager/WaypointMissionRobot.h>
+#include <iroc_fleet_manager/WaypointMissionInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
 #include <mrs_robot_diagnostics/parsing_functions.h>
@@ -67,10 +67,10 @@ using namespace actionlib;
 
 //to remove
 /* typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction>               MissionManagerClient; */
-typedef SimpleActionClient<iroc_mission_management::WaypointMissionManagementAction> WaypointMissionManagementClient;
+typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
 //to remove
 /* typedef mrs_mission_manager::waypointMissionGoal                                     ActionServerGoal; */
-typedef iroc_mission_management::WaypointMissionManagementGoal                       MissionManagementActionServerGoal;
+typedef iroc_fleet_manager::WaypointFleetManagerGoal                       FleetManagerActionServerGoal;
 
 typedef mrs_robot_diagnostics::robot_type_t     robot_type_t;
 
@@ -133,10 +133,10 @@ private:
 
   // | ----------------- action client callbacks ---------------- |
 
-  void waypointMissionActiveCallback(const std::vector<iroc_mission_management::WaypointMissionRobot>& robots);
-  void waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_mission_management::WaypointMissionManagementResultConstPtr& result,
-                                 const std::vector<iroc_mission_management::WaypointMissionRobot>& robots);
-  void waypointMissionFeedbackCallback(const iroc_mission_management::WaypointMissionManagementFeedbackConstPtr& result, const std::vector<iroc_mission_management::WaypointMissionRobot>& robot);
+  void waypointMissionActiveCallback(const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots);
+  void waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result,
+                                 const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots);
+  void waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& result, const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robot);
 
   // | ------------------ Additional functions ------------------ |
 
@@ -186,7 +186,7 @@ private:
 
   bool active_border_callback_;
 
-  std::unique_ptr<WaypointMissionManagementClient> action_client_ptr_;
+  std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
 };
 //}
 
@@ -389,7 +389,7 @@ void IROCBridge::onInit() {
 
   /* // | --------------------- action clients --------------------- | */
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
-  action_client_ptr_                = std::make_unique<WaypointMissionManagementClient>(waypoint_action_client_topic, false);
+  action_client_ptr_                = std::make_unique<WaypointFleetManagerClient>(waypoint_action_client_topic, false);
   ROS_INFO("[IROCBridge]: Created action client on topic \'ac/waypoint_mission\' -> \'%s\'", waypoint_action_client_topic.c_str());
 
   // | ------------------------- timers ------------------------- |
@@ -446,7 +446,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 
 /* waypointMissionActiveCallback //{ */
 
-void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_mission_management::WaypointMissionRobot>& robots) {
+void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
 
   ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
 
@@ -459,8 +459,8 @@ void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_mission_ma
 
 /* waypointMissionDoneCallback //{ */
 
-void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_mission_management::WaypointMissionManagementResultConstPtr& result,
-   const std::vector<iroc_mission_management::WaypointMissionRobot>& robots) {
+void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result,
+   const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
 
   if (result == NULL) {
     ROS_WARN("[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was restarted need to upload a new mission!");
@@ -490,7 +490,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
 /* waypointMissionFeedbackCallback //{ */
 
-void IROCBridge::waypointMissionFeedbackCallback(const iroc_mission_management::WaypointMissionManagementFeedbackConstPtr& feedback, const std::vector<iroc_mission_management::WaypointMissionRobot>& robots) {
+void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& feedback, const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
  
   /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress); */ 
 
@@ -1236,7 +1236,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     return;
   }
 
-  std::vector<iroc_mission_management::WaypointMissionRobot> mission_robots;
+  std::vector<iroc_fleet_manager::WaypointMissionRobot> mission_robots;
   mission_robots.reserve(mission.size());
   
   for (const auto& robot : mission ) {
@@ -1308,7 +1308,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 
     }
   
-    iroc_mission_management::WaypointMissionRobot mission_robot;
+    iroc_fleet_manager::WaypointMissionRobot mission_robot;
     mission_robot.name            = robot_name;
     mission_robot.frame_id        = frame_id;
     mission_robot.height_id       = height_id; 
@@ -1322,14 +1322,14 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
    ROS_INFO_STREAM("[IROCBridge]: Assigning robot " << robot.name << " into mission");
   }
 
-  MissionManagementActionServerGoal action_goal;
+  FleetManagerActionServerGoal action_goal;
   action_goal.robots = mission_robots;
 
   if (!action_client_ptr_->isServerConnected()) {
     
     std::stringstream ss;
-    ss << "Action server is not connected. Check iroc_mission_management node.\n";
-    ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_mission_management node.");
+    ss << "Action server is not connected. Check iroc_fleet_manager node.\n";
+    ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
     res.status = httplib::StatusCode::NotAcceptable_406;
     res.body   = ss.str();
     return;
