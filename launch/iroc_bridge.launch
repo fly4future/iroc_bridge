@@ -65,8 +65,8 @@
       <remap from="~svc/set_obstacle" to="/safety_area_manager/set_obstacle" />
 
       <!-- Services -->
-      <remap from="~ac/waypoint_mission" to="iroc_mission_management" />
-      <remap from="~svc/change_mission_state" to="iroc_mission_management/change_mission_state" />
+      <remap from="~ac/waypoint_mission" to="iroc_fleet_manager" />
+      <remap from="~svc/change_mission_state" to="iroc_fleet_manager/change_mission_state" />
     </node>
 
   </group>
