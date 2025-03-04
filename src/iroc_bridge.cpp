@@ -26,6 +26,7 @@
 #include <mrs_msgs/Path.h>
 
 #include <mrs_msgs/String.h>
+#include <iroc_fleet_manager/ChangeRobotMissionStateSrv.h>
 
 #include <mrs_msgs/SetSafetyBorderSrv.h>
 #include <mrs_msgs/SetSafetyBorderSrvRequest.h>
@@ -129,7 +130,8 @@ private:
   void       timerMain(const ros::TimerEvent& event);
 
   // | ----------------------- ROS Clients ----------------------- |
-  ros::ServiceClient sc_change_mission_state;
+  ros::ServiceClient sc_change_fleet_mission_state;
+  ros::ServiceClient sc_change_robot_mission_state;
 
   // | ----------------- action client callbacks ---------------- |
 
@@ -161,7 +163,8 @@ private:
   void setSafetyBorderCallback(const httplib::Request&, httplib::Response& res);
   void setObstacleCallback(const httplib::Request&, httplib::Response& res);
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
-  void changeMissionStateCallback(const httplib::Request&, httplib::Response& res);
+  void changeFleetMissionStateCallback(const httplib::Request&, httplib::Response& res);
+  void changeRobotMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void takeoffCallback(const httplib::Request&, httplib::Response& res);
   void takeoffAllCallback(const httplib::Request&, httplib::Response& res);
   void hoverCallback(const httplib::Request&, httplib::Response& res);
@@ -275,9 +278,14 @@ void IROCBridge::onInit() {
       std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_waypoint_mission", hdlr_set_waypoint_mission);
 
-  const httplib::Server::Handler hdlr_change_mission_state =
-      std::bind(&IROCBridge::changeMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post("/change_mission_state", hdlr_change_mission_state);
+  const httplib::Server::Handler hdlr_change_fleet_mission_state =
+      std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
+  //Using raw string for the creation of the endpoint
+  http_srv_.Post(R"(/fleet/mission/(start|stop|pause))", hdlr_change_fleet_mission_state);
+
+  const httplib::Server::Handler hdlr_change_robot_mission =
+      std::bind(&IROCBridge::changeRobotMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post(R"(/robots/(\w+)/mission/(start|stop|pause))", hdlr_change_robot_mission);
 
   const httplib::Server::Handler hdlr_takeoff = std::bind(&IROCBridge::takeoffCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/takeoff", hdlr_takeoff);
@@ -384,8 +392,11 @@ void IROCBridge::onInit() {
     }
   }
 
-  sc_change_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_mission_state"));
-  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_mission_state\' -> \'%s\'", sc_change_mission_state.getService().c_str());
+  sc_change_fleet_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_fleet_mission_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_fleet_mission_state\' -> \'%s\'", sc_change_fleet_mission_state.getService().c_str());
+
+  sc_change_robot_mission_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_robot_mission_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'", sc_change_robot_mission_state.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
@@ -1354,35 +1365,51 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
  }
 //}
 
-/* changeMissionStateCallback() method //{ */
-void IROCBridge::changeMissionStateCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a changeMissionStateCallback message JSON -> ROS.");
+/* changeFleetMissionStateCallback() method //{ */
+void IROCBridge::changeFleetMissionStateCallback(const httplib::Request& req, httplib::Response& res) {
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a changeFleetMissionStateCallback message JSON -> ROS.");
 
-  res.status = httplib::StatusCode::UnprocessableContent_422;
-  json json_msg;
-  try {
-    json_msg = json::parse(req.body);
-  }
-  catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    return;
-  }
-
-  std::string type;
-  const auto succ = parse_vars(json_msg, {{"type", &type}});
-  if (!succ)
-    return;
+  auto type = req.matches[1];
 
   std::stringstream ss;
-  mrs_msgs::String::Request string_req;
-  string_req.value = type;
+  mrs_msgs::String ros_srv;
+  ros_srv.request.value = type; 
 
-  const auto resp = callService<mrs_msgs::String>(sc_change_mission_state, string_req);
+  const auto resp = callService<mrs_msgs::String>(sc_change_fleet_mission_state, ros_srv.request);
   if (!resp.success) { 
-          ss << "Mission start service was not successful with message: " << resp.message << "\n";
+    ss << "Mission start service was not successful with message: " << resp.message << "\n";
+    res.status = httplib::StatusCode::InternalServerError_500;
+  } else {
+    res.status = httplib::StatusCode::Accepted_202;
+    ss << "Mission started successfully";
   }
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = ss.str();
+  json json_msg = {{"message", ss.str()}};
+  res.set_content(json_msg.dump(), "application/json");
+}
+//}
+
+/* changeRobotMissionStateCallback() method //{ */
+void IROCBridge::changeRobotMissionStateCallback(const httplib::Request& req, httplib::Response& res) {
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a changeRobotMissionStateCallback message JSON -> ROS.");
+
+  auto robot_name = req.matches[1];
+  auto type = req.matches[2];
+
+  std::stringstream ss;
+  iroc_fleet_manager::ChangeRobotMissionStateSrv ros_srv;
+  ros_srv.request.robot_name = robot_name;
+  ros_srv.request.type       = type;
+
+  const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
+  if (!resp.success) { 
+    ss << "Mission start service was not successful with message: " << resp.message << "\n";
+    res.status = httplib::StatusCode::InternalServerError_500;
+  } else {
+    res.status = httplib::StatusCode::Accepted_202;
+    ss << "Mission started successfully";
+  }
+  json json_msg = {{"message", ss.str()}};
+  res.set_content(json_msg.dump(), "application/json");
 }
 //}
 

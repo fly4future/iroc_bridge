@@ -66,7 +66,8 @@
 
       <!-- Services -->
       <remap from="~ac/waypoint_mission" to="iroc_fleet_manager" />
-      <remap from="~svc/change_mission_state" to="iroc_fleet_manager/change_mission_state" />
+      <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
+      <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />
     </node>
 
   </group>
