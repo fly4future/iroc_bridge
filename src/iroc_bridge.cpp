@@ -1021,13 +1021,17 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   active_border_callback_ = true;
 
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setSafetyBorderCallback message JSON -> ROS.");
-  res.status = httplib::StatusCode::UnprocessableContent_422;
+  std::stringstream ss;
   json json_msg;
   try {
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad json input: " << e.what();
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
@@ -1061,20 +1065,25 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
 
   if (!points.is_array()) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body = "Bad points input: Expected an array";
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad points input: Expected an array "; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
   //Map the received id and save it into the corresponding vertical frame string
   auto it = height_id_map.find(height_id);
+
   if (it != height_id_map.end()) {
     vertical_frame = it->second;
   } else {
-      ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
-      res.status = httplib::StatusCode::NotAcceptable_406;
-      res.body = "Unknown height_id";
-      return;
+    ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Unknown height_id field"; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
   }
 
   std::vector<mrs_msgs::Point2D> border_points;
@@ -1091,7 +1100,6 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   ROS_INFO("[IROCBridge]: Border points size %zu ", border_points.size());
 
   mrs_msgs::SafetyBorder safety_border;
-
   safety_border.enabled          = enabled;
   safety_border.horizontal_frame = horizontal_frame;
   safety_border.vertical_frame   = vertical_frame;
@@ -1109,26 +1117,29 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   const auto result = setSafetyBorderAction(robot_names, safety_border);
 
   if (result.success) {
-    res.status = httplib::StatusCode::Accepted_202;
-    res.body   = result.message;
-    
+    res.status = httplib::StatusCode::Created_201;
+    ss << "Safety zone created successfully."; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
   } else {
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = result.message;
+    res.status = httplib::StatusCode::InternalServerError_500;
+    ss << "Safety zone creation failed."; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
   }
-
   active_border_callback_ = false;
-
-  }
+}
 //}
 
 /* setObstacleCallback() method //{ */
 void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Response& res) {
 
+  std::stringstream ss;
+
   if (active_border_callback_) {
     return;
   }
-  
+
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
@@ -1137,6 +1148,10 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
   }
   catch (const json::exception& e) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad mission input: Expected an array"; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
@@ -1165,20 +1180,25 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
 
   if (!points.is_array()) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body = "Bad points input: Expected an array";
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad points input: Expected an array"; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
   //Map the received id and save it into the corresponding vertical frame string
   auto it = height_id_map.find(height_id);
+
   if (it != height_id_map.end()) {
     vertical_frame = it->second;
   } else {
-      ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
-      res.status = httplib::StatusCode::NotAcceptable_406;
-      res.body = "Unknown height_id";
-      return;
+    ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Unknown height_id field"; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
   }
 
   std::vector<mrs_msgs::Point2D> border_points;
@@ -1186,7 +1206,7 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
 
   for (const auto& el : points) {
     mrs_msgs::Point2D pt;
-    const auto          succ = parse_vars(el, {{"x", &pt.x}, {"y", &pt.y}});
+    const auto succ = parse_vars(el, {{"x", &pt.x}, {"y", &pt.y}});
     if (!succ)
       return;
     border_points.push_back(pt);
@@ -1208,20 +1228,21 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
   robot_names.reserve(robot_handlers_.handlers.size());
   for (const auto& rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
-
   
   const auto result = setObstacleAction(robot_names, obstacle_req);
 
   if (result.success) {
-    res.status = httplib::StatusCode::Accepted_202;
-    res.body   = result.message;
-    
+    res.status = httplib::StatusCode::Created_201;
+    ss << result.message; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
   } else {
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = result.message;
+    res.status = httplib::StatusCode::InternalServerError_500;
+    ss << result.message; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
   }
-
-  }
+}
 //}
 
 /* waypointMissionCallback() method //{ */
@@ -1229,11 +1250,17 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   ROS_INFO_STREAM("[IROCBridge]: Parsing a waypointMissionCallback message JSON -> ROS.");
   res.status = httplib::StatusCode::UnprocessableContent_422;
   json json_msg;
+  std::stringstream ss;
+
   try {
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad json input: " << e.what();
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
@@ -1244,12 +1271,17 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 
   if (!mission.is_array()) {
     ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad mission input: Expected an array.");
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad mission input: Expected an array"; 
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
+  //Process the robots assigned into the mission 
   std::vector<iroc_fleet_manager::WaypointMissionRobot> mission_robots;
   mission_robots.reserve(mission.size());
-  
+ 
   for (const auto& robot : mission ) {
 
     int         frame_id;
@@ -1259,10 +1291,15 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     json        points;
     const auto  succ = parse_vars(robot, 
         {{"robot_name", &robot_name}, {"frame_id", &frame_id}, {"height_id", &height_id}, {"points", &points}, {"terminal_action", &terminal_action}});
+
     if (!succ)
       return;
     if (!points.is_array()) {
       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+      res.status = httplib::StatusCode::BadRequest_400;
+      ss << "Bad points input: Expected an array"; 
+      json json_response_msg = {{"message", ss.str()}};
+      res.set_content(json_response_msg.dump(), "application/json");
       return;
     }
 
@@ -1272,9 +1309,10 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 
     if (!rh_ptr) {
       ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
-      ss << "robot \"" << robot_name << "\" not found, ignoring";
       res.status = httplib::StatusCode::BadRequest_400;
-      res.body   = ss.str();
+      ss << "robot \"" << robot_name << "\" not found, ignoring";
+      json json_response_msg = {{"message", ss.str()}};
+      res.set_content(json_response_msg.dump(), "application/json");
       return;
     }
 
@@ -1283,40 +1321,34 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     ref_points.reserve(points.size());
 
     switch (robot_type){
+      case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
+        ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
+        bool use_heading = false;
+        for (const auto& el : points) {
+            mrs_msgs::Reference ref;
+            const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}, {"heading", &ref.heading}});
+            if (!succ)
+              return;
+            ref_points.push_back(ref);
+        }
+        break;
+      };
 
-    case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
-
-      ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
-
-      bool use_heading = false;
-      for (const auto& el : points) {
+      case static_cast<uint8_t>(robot_type_t::BOAT): {
+        ROS_INFO("[IROCBridge]: BOAT TYPE: ");
+        bool use_heading = false;
+        for (const auto& el : points) {
           mrs_msgs::Reference ref;
-          const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"z", &ref.position.z}, {"heading", &ref.heading}});
+          const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"heading", &ref.heading}});
           if (!succ)
             return;
           ref_points.push_back(ref);
-      }
+        }
+        break;
+      };
 
-     break;
-    };
-
-    case static_cast<uint8_t>(robot_type_t::BOAT): {
-
-      ROS_INFO("[IROCBridge]: BOAT TYPE: ");
-      bool use_heading = false;
-      for (const auto& el : points) {
-        mrs_msgs::Reference ref;
-        const auto          succ = parse_vars(el, {{"x", &ref.position.x}, {"y", &ref.position.y}, {"heading", &ref.heading}});
-        if (!succ)
-          return;
-        ref_points.push_back(ref);
-      }
-
-    break;
-    };
-    default:
-    break;
-
+      default:
+        break;
     }
   
     iroc_fleet_manager::WaypointMissionRobot mission_robot;
@@ -1325,10 +1357,11 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     mission_robot.height_id       = height_id; 
     mission_robot.points          = ref_points;
     mission_robot.terminal_action = terminal_action;
-
+    //Save the individual robot mission information
     mission_robots.push_back(mission_robot);
   }
 
+  //Debugging/logging
   for (const auto& robot : mission_robots) {
    ROS_INFO_STREAM("[IROCBridge]: Assigning robot " << robot.name << " into mission");
   }
@@ -1337,31 +1370,32 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   action_goal.robots = mission_robots;
 
   if (!action_client_ptr_->isServerConnected()) {
-    
-    std::stringstream ss;
     ss << "Action server is not connected. Check iroc_fleet_manager node.\n";
     ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = ss.str();
+    res.status = httplib::StatusCode::InternalServerError_500;
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
   }
 
   if (!action_client_ptr_->getState().isDone()) {
-
-    std::stringstream ss;
-    ss << "Mission is already running. Terminate the previous one, or wait until it is finished.\n";
     ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
-    res.status = httplib::StatusCode::NotAcceptable_406;
-    res.body   = ss.str();
+    ss << "Mission is already running. Terminate the previous one, or wait until it is finished";
+    res.status = httplib::StatusCode::Conflict_409;
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
     return;
-   
   }
 
   action_client_ptr_->sendGoal(
       action_goal, std::bind(&IROCBridge::waypointMissionDoneCallback, this, std::placeholders::_1, std::placeholders::_2, mission_robots),
       std::bind(&IROCBridge::waypointMissionActiveCallback, this, mission_robots ),
       std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, mission_robots));
-  
+
+  ss << "Mission processed successfully";
+    res.status = httplib::StatusCode::Created_201;
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
  }
 //}
 
