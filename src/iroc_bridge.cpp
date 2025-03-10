@@ -1383,8 +1383,17 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
                                std::bind(&IROCBridge::waypointMissionActiveCallback, this, mission_robots),
                                std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, mission_robots));
 
-  ss << "Mission processed successfully";
-  res.status             = httplib::StatusCode::Created_201;
+  // waiting in the case the trajectories are rejected
+  ros::Duration(mission_robots.size() * 0.5).sleep();
+
+  if (action_client_ptr_->getState().isDone()) {
+    ss << "Mission rejected. Check logs!";
+    res.status             = httplib::StatusCode::BadRequest_400;
+  } else {
+    ss << "Mission processed successfully";
+    res.status             = httplib::StatusCode::Created_201;
+  }
+
   json json_response_msg = {{"message", ss.str()}};
   res.set_content(json_response_msg.dump(), "application/json");
 }
@@ -1402,11 +1411,11 @@ void IROCBridge::changeFleetMissionStateCallback(const httplib::Request& req, ht
 
   const auto resp = callService<mrs_msgs::String>(sc_change_fleet_mission_state, ros_srv.request);
   if (!resp.success) {
-    ss << "Mission start service was not successful with message: " << resp.message << "\n";
+    ss << "Call was not successful with message: " << resp.message << "\n";
     res.status = httplib::StatusCode::InternalServerError_500;
   } else {
+    ss << "Call successfull\n";
     res.status = httplib::StatusCode::Accepted_202;
-    ss << "Mission started successfully";
   }
   json json_msg = {{"message", ss.str()}};
   res.set_content(json_msg.dump(), "application/json");
@@ -1427,11 +1436,11 @@ void IROCBridge::changeRobotMissionStateCallback(const httplib::Request& req, ht
 
   const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
   if (!resp.success) {
-    ss << "Mission start service was not successful with message: " << resp.message << "\n";
+    ss << "Call was not successful with message: " << resp.message << "\n";
     res.status = httplib::StatusCode::InternalServerError_500;
   } else {
+    ss << "Call successfull\n";
     res.status = httplib::StatusCode::Accepted_202;
-    ss << "Mission started successfully";
   }
   json json_msg = {{"message", ss.str()}};
   res.set_content(json_msg.dump(), "application/json");
