@@ -1389,9 +1389,11 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   if (action_client_ptr_->getState().isDone()) {
     ss << "Mission rejected. Check logs!";
     res.status             = httplib::StatusCode::BadRequest_400;
+    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
   } else {
     ss << "Mission processed successfully";
     res.status             = httplib::StatusCode::Created_201;
+    ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
   }
 
   json json_response_msg = {{"message", ss.str()}};
@@ -1413,9 +1415,11 @@ void IROCBridge::changeFleetMissionStateCallback(const httplib::Request& req, ht
   if (!resp.success) {
     ss << "Call was not successful with message: " << resp.message << "\n";
     res.status = httplib::StatusCode::InternalServerError_500;
+    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
   } else {
     ss << "Call successfull\n";
     res.status = httplib::StatusCode::Accepted_202;
+    ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
   }
   json json_msg = {{"message", ss.str()}};
   res.set_content(json_msg.dump(), "application/json");
