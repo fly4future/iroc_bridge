@@ -462,6 +462,7 @@ void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_mana
 
   ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
 
+  /* ROS_INFO_STREAM("[IROCBridge]: Action client state " << action_client_ptr_->getState().toString()); */
   for (const auto& robot : robots) {
     ROS_INFO_STREAM(robot);
   }
@@ -485,17 +486,21 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
     if (result->success) {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\". Result message is: \"" << result->message
-                                                                                    << "\"");
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
     } else {
-      ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\". Result message is: \"" << result->message
-                                                                                     << "\"");
+      ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+    }
+
+    std::vector<json> result_msgs;
+    for (const auto& message : result->messages) {
+      json json_msg= {
+        {"message", message},
+      };
+      result_msgs.emplace_back(json_msg);
     }
 
     const json json_msg = {
-        {"mission_result", result->message},
-        {"mission_success", result->success},
-    };
+        {"mission_result", result_msgs}, {"mission_success", result->success}};
     sendJsonMessage("WaypointMissionDone", json_msg);
   }
 }
@@ -510,6 +515,7 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
   /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress);
    */
 
+  /* ROS_INFO_STREAM("[IROCBridge]:Feedback callback: Action client state " << action_client_ptr_->getState().toString()); */
   auto              robots_feedback = feedback->info.robots_feedback;
   std::vector<json> json_msgs;
 
@@ -1383,15 +1389,19 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
                                std::bind(&IROCBridge::waypointMissionActiveCallback, this, mission_robots),
                                std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1, mission_robots));
 
-  // waiting in the case the trajectories are rejected
-  ros::Duration(mission_robots.size() * 0.5).sleep();
+  // waiting in the case the trajectories are rejected/ we can better wait will the state is pending
+  /* ROS_INFO_STREAM("[IROCBridge]: Action client state " << action_client_ptr_->getState().toString()); */
+  ros::Duration(mission_robots.size() * 1.0).sleep();
 
   if (action_client_ptr_->getState().isDone()) {
-    ss << "Mission rejected. Check logs!";
+    auto result =  action_client_ptr_->getResult();
+    for (const auto& message : result->messages) {
+      ss << message << ",";
+    }
     res.status             = httplib::StatusCode::BadRequest_400;
     ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
   } else {
-    ss << "Mission processed successfully";
+    ss << "Mission received successfully";
     res.status             = httplib::StatusCode::Created_201;
     ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
   }
