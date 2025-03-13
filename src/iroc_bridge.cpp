@@ -480,7 +480,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
         "[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
         "restarted need to upload a new mission!");
     const json json_msg = {
-        {"mission_result", "Mission manager died in ongoing mission"},
+        {"mission_result", "Fleet manager died in ongoing mission"},
         {"mission_success", false},
     };
     sendJsonMessage("WaypointMissionDone", json_msg);
