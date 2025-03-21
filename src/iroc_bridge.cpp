@@ -486,9 +486,9 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
     if (result->success) {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     } else {
-      ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+      ROS_WARN_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     }
 
     std::vector<json> result_msgs;
@@ -724,7 +724,7 @@ IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc, typename Sv
       ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
       return {true, res.message};
     } else {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      ROS_WARN_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
       return {false, res.message};
     }
   } else {
@@ -796,7 +796,7 @@ IROCBridge::result_t IROCBridge::takeoffAction(const std::vector<std::string>& r
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -825,7 +825,7 @@ IROCBridge::result_t IROCBridge::hoverAction(const std::vector<std::string>& rob
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -854,7 +854,7 @@ IROCBridge::result_t IROCBridge::landAction(const std::vector<std::string>& robo
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -883,7 +883,7 @@ IROCBridge::result_t IROCBridge::landHomeAction(const std::vector<std::string>& 
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -915,7 +915,7 @@ IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::st
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -945,7 +945,7 @@ IROCBridge::result_t IROCBridge::setObstacleAction(const std::vector<std::string
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -967,7 +967,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     return;
   }
 
@@ -978,7 +978,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
     return;
 
   if (!points.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
     return;
   }
 
@@ -1006,7 +1006,7 @@ void IROCBridge::pathCallback(const httplib::Request& req, httplib::Response& re
   std::scoped_lock  lck(robot_handlers_.mtx);
   auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
   if (!rh_ptr) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
     ss << "robot \"" << robot_name << "\" not found, ignoring";
     res.status = httplib::StatusCode::BadRequest_400;
     res.body   = ss.str();
@@ -1034,7 +1034,7 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad json input: " << e.what();
     json json_response_msg = {{"message", ss.str()}};
@@ -1066,7 +1066,7 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
     return;
 
   if (!points.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad points input: Expected an array ";
     json json_response_msg = {{"message", ss.str()}};
@@ -1080,7 +1080,7 @@ void IROCBridge::setSafetyBorderCallback(const httplib::Request& req, httplib::R
   if (it != height_id_map.end()) {
     vertical_frame = it->second;
   } else {
-    ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+    ROS_WARN_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Unknown height_id field";
     json json_response_msg = {{"message", ss.str()}};
@@ -1149,7 +1149,7 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad mission input: Expected an array";
     json json_response_msg = {{"message", ss.str()}};
@@ -1176,7 +1176,7 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
     return;
 
   if (!points.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad points input: Expected an array";
     json json_response_msg = {{"message", ss.str()}};
@@ -1190,7 +1190,7 @@ void IROCBridge::setObstacleCallback(const httplib::Request& req, httplib::Respo
   if (it != height_id_map.end()) {
     vertical_frame = it->second;
   } else {
-    ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
+    ROS_WARN_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Unknown height_id field";
     json json_response_msg = {{"message", ss.str()}};
@@ -1253,7 +1253,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad json input: " << e.what();
     json json_response_msg = {{"message", ss.str()}};
@@ -1267,7 +1267,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     return;
 
   if (!mission.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad mission input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad mission input: Expected an array.");
     res.status = httplib::StatusCode::BadRequest_400;
     ss << "Bad mission input: Expected an array";
     json json_response_msg = {{"message", ss.str()}};
@@ -1292,7 +1292,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     if (!succ)
       return;
     if (!points.is_array()) {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
       res.status = httplib::StatusCode::BadRequest_400;
       ss << "Bad points input: Expected an array";
       json json_response_msg = {{"message", ss.str()}};
@@ -1305,7 +1305,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
 
     if (!rh_ptr) {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
       res.status = httplib::StatusCode::BadRequest_400;
       ss << "robot \"" << robot_name << "\" not found, ignoring";
       json json_response_msg = {{"message", ss.str()}};
@@ -1368,7 +1368,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
 
   if (!action_client_ptr_->isServerConnected()) {
     ss << "Action server is not connected. Check iroc_fleet_manager node.\n";
-    ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
+    ROS_WARN_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
     res.status             = httplib::StatusCode::InternalServerError_500;
     json json_response_msg = {{"message", ss.str()}};
     res.set_content(json_response_msg.dump(), "application/json");
@@ -1376,7 +1376,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
   }
 
   if (!action_client_ptr_->getState().isDone()) {
-    ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+    ROS_WARN_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
     ss << "Mission is already running. Terminate the previous one, or wait until it is finished";
     res.status             = httplib::StatusCode::Conflict_409;
     json json_response_msg = {{"message", ss.str()}};
@@ -1399,9 +1399,9 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
       ss << message << ",";
     }
     res.status             = httplib::StatusCode::BadRequest_400;
-    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
+    ROS_WARN("[IROCBridge]: %s", ss.str().c_str());
   } else {
-    ss << "Mission received successfully";
+    ss << "Mission was processed successfully";
     res.status             = httplib::StatusCode::Created_201;
     ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
   }
@@ -1425,7 +1425,7 @@ void IROCBridge::changeFleetMissionStateCallback(const httplib::Request& req, ht
   if (!resp.success) {
     ss << "Call was not successful with message: " << resp.message << "\n";
     res.status = httplib::StatusCode::InternalServerError_500;
-    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
+    ROS_WARN("[IROCBridge]: %s", ss.str().c_str());
   } else {
     ss << "Call successfull\n";
     res.status = httplib::StatusCode::Accepted_202;
@@ -1470,7 +1470,7 @@ void IROCBridge::takeoffCallback(const httplib::Request& req, httplib::Response&
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     return;
   }
 
@@ -1482,7 +1482,7 @@ void IROCBridge::takeoffCallback(const httplib::Request& req, httplib::Response&
     return;
 
   if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
     return;
   }
 
@@ -1502,7 +1502,7 @@ void IROCBridge::hoverCallback(const httplib::Request& req, httplib::Response& r
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     return;
   }
 
@@ -1514,7 +1514,7 @@ void IROCBridge::hoverCallback(const httplib::Request& req, httplib::Response& r
     return;
 
   if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
     return;
   }
 
@@ -1534,7 +1534,7 @@ void IROCBridge::landCallback(const httplib::Request& req, httplib::Response& re
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     return;
   }
 
@@ -1546,7 +1546,7 @@ void IROCBridge::landCallback(const httplib::Request& req, httplib::Response& re
     return;
 
   if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
     return;
   }
 
@@ -1566,7 +1566,7 @@ void IROCBridge::landHomeCallback(const httplib::Request& req, httplib::Response
     json_msg = json::parse(req.body);
   }
   catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
     return;
   }
 
@@ -1578,7 +1578,7 @@ void IROCBridge::landHomeCallback(const httplib::Request& req, httplib::Response
     return;
 
   if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
     return;
   }
 
