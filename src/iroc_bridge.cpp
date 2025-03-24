@@ -159,6 +159,7 @@ private:
   void setSafetyBorderCallback(const httplib::Request&, httplib::Response& res);
   void setObstacleCallback(const httplib::Request&, httplib::Response& res);
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
+  void autonomyTestCallback(const httplib::Request&, httplib::Response& res);
   void changeFleetMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void changeRobotMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void takeoffCallback(const httplib::Request&, httplib::Response& res);
@@ -271,6 +272,10 @@ void IROCBridge::onInit() {
   const httplib::Server::Handler hdlr_set_waypoint_mission =
       std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_waypoint_mission", hdlr_set_waypoint_mission);
+
+  const httplib::Server::Handler hdlr_autonomy_test =
+      std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1, std::placeholders::_2);
+  http_srv_.Post(R"(/robots/(\w+)/autonomy_test/(start|stop|pause)))", hdlr_autonomy_test);
 
   const httplib::Server::Handler hdlr_change_fleet_mission_state =
       std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
@@ -1399,6 +1404,68 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     ss << "Mission was processed successfully";
     res.status             = httplib::StatusCode::Created_201;
     ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
+  }
+
+  json json_response_msg = {{"message", ss.str()}};
+  res.set_content(json_response_msg.dump(), "application/json");
+}
+//}
+
+/* autonomyTestCallback() method //{ */
+void IROCBridge::autonomyTestCallback(const httplib::Request& req, httplib::Response& res) {
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a autonomyTestCallback message JSON -> ROS.");
+  res.status = httplib::StatusCode::UnprocessableContent_422;
+  json              json_msg;
+  std::stringstream ss;
+
+  try {
+    json_msg = json::parse(req.body);
+  }
+  catch (const json::exception& e) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad json input: " << e.what();
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
+  }
+
+  json       mission;
+  std::string     robot_name;
+  const auto succ = parse_vars(json_msg, {{"robot_name", &robot_name}});
+  if (!succ)
+    return;
+
+
+  std::scoped_lock  lck(robot_handlers_.mtx);
+  auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+
+  if (!rh_ptr) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "robot \"" << robot_name << "\" not found, ignoring";
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
+  }
+
+  auto robot_type = rh_ptr->sh_general_robot_info.getMsg()->robot_type;
+
+  switch (robot_type) {
+    case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
+      ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
+      bool use_heading = false;
+      break;
+    };
+
+    case static_cast<uint8_t>(robot_type_t::BOAT): {
+      ROS_INFO("[IROCBridge]: BOAT TYPE: ");
+      bool use_heading = false;
+      break;
+    };
+
+    default:
+      break;
   }
 
   json json_response_msg = {{"message", ss.str()}};
