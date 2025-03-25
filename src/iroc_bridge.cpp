@@ -44,6 +44,7 @@
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 
 #include <iroc_fleet_manager/WaypointFleetManagerAction.h>
+#include <iroc_fleet_manager/AutonomyTestAction.h>
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
 
@@ -67,6 +68,8 @@ using namespace actionlib;
 
 typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
 typedef iroc_fleet_manager::WaypointFleetManagerGoal FleetManagerActionServerGoal;
+//Autonomy test goal
+typedef iroc_fleet_manager::AutonomyTestGoal AutonomyTestActionServerGoal;
 
 typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
 
@@ -127,6 +130,8 @@ private:
   // | ----------------------- ROS Clients ----------------------- |
   ros::ServiceClient sc_change_fleet_mission_state;
   ros::ServiceClient sc_change_robot_mission_state;
+  ros::ServiceClient sc_change_autonomy_test_state;
+  std::string        latest_mission_type_;
 
   // | ----------------- action client callbacks ---------------- |
 
@@ -135,6 +140,12 @@ private:
                                    const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots);
   void waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& result,
                                        const std::vector<iroc_fleet_manager::WaypointMissionRobot>&    robot);
+
+  void AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot);
 
   // | ------------------ Additional functions ------------------ |
 
@@ -187,6 +198,7 @@ private:
   bool active_border_callback_;
 
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
+  std::unique_ptr<AutonomyTestClient>         autonomy_test_client_ptr_;
 };
 //}
 
@@ -275,7 +287,7 @@ void IROCBridge::onInit() {
 
   const httplib::Server::Handler hdlr_autonomy_test =
       std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post(R"(/robots/(\w+)/autonomy_test/(start|stop|pause)))", hdlr_autonomy_test);
+  http_srv_.Post("/set_autonomy_test", hdlr_autonomy_test);
 
   const httplib::Server::Handler hdlr_change_fleet_mission_state =
       std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
@@ -376,10 +388,10 @@ void IROCBridge::onInit() {
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_set_safety_area.getService().c_str());
 
       robot_handler.sc_set_obstacle = nh_.serviceClient<mrs_msgs::SetObstacleSrv>("/" + robot_name + nh_.resolveName("svc/set_obstacle"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_set_obstacle.getService().c_str());
 
 
       // | ----------------------- publishers ----------------------- |
@@ -399,10 +411,20 @@ void IROCBridge::onInit() {
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
            sc_change_robot_mission_state.getService().c_str());
 
+  sc_change_autonomy_test_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_autonomy_test_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_autonomy_test_state\' -> \'%s\'",
+           sc_change_autonomy_test_state.getService().c_str());
+
   /* // | --------------------- action clients --------------------- | */
+  //Fleet manager
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
   action_client_ptr_                             = std::make_unique<WaypointFleetManagerClient>(waypoint_action_client_topic, false);
   ROS_INFO("[IROCBridge]: Created action client on topic \'ac/waypoint_mission\' -> \'%s\'", waypoint_action_client_topic.c_str());
+
+  //Autonomy test
+  const std::string autonomy_test_client_topic = nh_.resolveName("ac/autonomy_test");
+  autonomy_test_client_ptr_                    = std::make_unique<AutonomyTestClient>(autonomy_test_client_topic, false);
+  ROS_INFO("[IROCBridge]: Created action client on topic \'ac/autonomy_test\' -> \'%s\'", autonomy_test_client_topic.c_str());
 
   // | ------------------------- timers ------------------------- |
 
@@ -456,6 +478,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 // |                  acition client callbacks                  |
 // --------------------------------------------------------------
 
+//TODO: Improve the mission callbacks to use template functions
 /* waypointMissionActiveCallback //{ */
 
 void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
@@ -537,6 +560,91 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
 
   const json json_msg = {
       {"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
+
+  sendJsonMessage("WaypointMissionFeedback", json_msg);
+}
+
+//}
+
+//Autonomy test callbacks
+/* AutonomyTestActiveCallback() //{ */
+void IROCBridge::AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
+  ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
+
+  /* ROS_INFO_STREAM("[IROCBridge]: Action client state " << action_client_ptr_->getState().toString()); */
+  for (const auto& robot : robots) {
+    ROS_INFO_STREAM(robot);
+  }
+}
+
+//}
+
+/* AutonomyTestDoneCallback() //{ */
+
+void IROCBridge::AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
+  if (result == NULL) {
+    ROS_WARN(
+        "[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
+        "restarted need to upload a new mission!");
+    const json json_msg = {
+        {"mission_result", "Fleet manager died in ongoing mission"},
+        {"mission_success", false},
+    };
+    sendJsonMessage("WaypointMissionDone", json_msg);
+  } else {
+    if (result->success) {
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
+    } else {
+      ROS_WARN_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
+    }
+
+    std::vector<json> result_msgs;
+    for (const auto& message : result->messages) {
+      json json_msg= {
+        {"message", message},
+      };
+      result_msgs.emplace_back(json_msg);
+    }
+
+    const json json_msg = {
+        {"mission_result", result_msgs}, {"mission_success", result->success}};
+    sendJsonMessage("WaypointMissionDone", json_msg);
+  }
+}
+
+//}
+
+/* AutonomyTestFeedbackCallback() //{ */
+
+void IROCBridge::AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
+    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot) {
+
+  /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress);
+  */
+
+  /* ROS_INFO_STREAM("[IROCBridge]:Feedback callback: Action client state " << action_client_ptr_->getState().toString()); */
+  auto              robots_feedback = feedback->info.robots_feedback;
+  std::vector<json> json_msgs;
+
+  // Collect each robot feedback and create a json for each
+  for (const auto& rfb : robots_feedback) {
+    json json_msg = {
+      {"robot_name", rfb.name},
+      {"message", rfb.message},
+      {"mission_progress", rfb.mission_progress},
+      {"current_goal", rfb.goal_idx},
+      {"distance_to_goal", rfb.distance_to_closest_goal},
+      {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
+      {"goal_progress", rfb.goal_progress},
+      {"distance_to_finish", rfb.distance_to_finish},
+      {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time},
+    };
+    json_msgs.emplace_back(json_msg);
+  }
+
+  const json json_msg = {
+    {"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
 
   sendJsonMessage("WaypointMissionFeedback", json_msg);
 }
@@ -1406,6 +1514,7 @@ void IROCBridge::waypointMissionCallback(const httplib::Request& req, httplib::R
     ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
   }
 
+  latest_mission_type_ = "waypoint";
   json json_response_msg = {{"message", ss.str()}};
   res.set_content(json_response_msg.dump(), "application/json");
 }
@@ -1467,7 +1576,56 @@ void IROCBridge::autonomyTestCallback(const httplib::Request& req, httplib::Resp
     default:
       break;
   }
+  //We are using an array of robots as input, as we are using the waypoint mission structure that expects an array of robots.
+  //Kept for simplicity to avoid changing the previous structure that supports multiple robots.
+  //As we decide that autonomy test will be for one drone at a time, we are only adding the specified robot for the autonomy test.
+  std::vector<iroc_fleet_manager::AutonomyTestRobot> mission_robots;
+  iroc_fleet_manager::AutonomyTestRobot mission_robot;
+  mission_robot.name = robot_name;
+  mission_robots.push_back(mission_robot);
 
+  AutonomyTestActionServerGoal action_goal;
+  action_goal.robots = mission_robots;
+
+  if (!autonomy_test_client_ptr_->isServerConnected()) {
+    ss << "Action server is not connected. Check iroc_fleet_manager node.\n";
+    ROS_WARN_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
+    res.status             = httplib::StatusCode::InternalServerError_500;
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
+  }
+
+  if (!autonomy_test_client_ptr_->getState().isDone()) {
+    ROS_WARN_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+    ss << "Mission is already running. Terminate the previous one, or wait until it is finished";
+    res.status             = httplib::StatusCode::Conflict_409;
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
+  }
+
+  autonomy_test_client_ptr_->sendGoal(action_goal,
+                               std::bind(&IROCBridge::AutonomyTestDoneCallback, this, std::placeholders::_1, std::placeholders::_2, mission_robots),
+                               std::bind(&IROCBridge::AutonomyTestActiveCallback, this, mission_robots),
+                               std::bind(&IROCBridge::AutonomyTestFeedbackCallback, this, std::placeholders::_1, mission_robots));
+    
+  ros::Duration(mission_robots.size() * 1.0).sleep();
+
+  if (autonomy_test_client_ptr_->getState().isDone()) {
+    auto result =  autonomy_test_client_ptr_->getResult();
+    for (const auto& message : result->messages) {
+      ss << message << ",";
+    }
+    res.status             = httplib::StatusCode::BadRequest_400;
+    ROS_WARN("[IROCBridge]: %s", ss.str().c_str());
+  } else {
+    ss << "Mission was processed successfully";
+    res.status             = httplib::StatusCode::Created_201;
+    ROS_INFO("[IROCBridge]: %s", ss.str().c_str());
+  }
+
+  latest_mission_type_ = "autonomy_test";
   json json_response_msg = {{"message", ss.str()}};
   res.set_content(json_response_msg.dump(), "application/json");
 }
@@ -1510,14 +1668,28 @@ void IROCBridge::changeRobotMissionStateCallback(const httplib::Request& req, ht
   ros_srv.request.robot_name = robot_name;
   ros_srv.request.type       = type;
 
-  const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
-  if (!resp.success) {
-    ss << "Call was not successful with message: " << resp.message << "\n";
-    res.status = httplib::StatusCode::InternalServerError_500;
-  } else {
-    ss << "Call successfull\n";
-    res.status = httplib::StatusCode::Accepted_202;
+  if (latest_mission_type_ == "waypoint") {
+    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
+    if (!resp.success) {
+      ss << "Call was not successful with message: " << resp.message << "\n";
+      res.status = httplib::StatusCode::InternalServerError_500;
+    } else {
+      ss << "Call successfull\n";
+      res.status = httplib::StatusCode::Accepted_202;
+    }  
   }
+
+  if (latest_mission_type_ == "autonomy_test") {
+    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_autonomy_test_state, ros_srv.request);
+    if (!resp.success) {
+      ss << "Call was not successful with message: " << resp.message << "\n";
+      res.status = httplib::StatusCode::InternalServerError_500;
+    } else {
+      ss << "Call successfull\n";
+      res.status = httplib::StatusCode::Accepted_202;
+    }  
+  }
+  
   json json_msg = {{"message", ss.str()}};
   res.set_content(json_msg.dump(), "application/json");
 }
