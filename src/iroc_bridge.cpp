@@ -335,7 +335,7 @@ void IROCBridge::onInit() {
   th_http_srv_.detach();
 
   th_crow_srv_ = std::thread([&]() { app_.port(9000).multithreaded().run(); });
-  th_crow_srv.detach();
+  th_crow_srv_.detach();
 
   // | ----------------------- subscribers ---------------------- |
 
