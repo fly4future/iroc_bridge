@@ -1,3 +1,6 @@
 {
-  "robot_name": "uav1"
+  "robot_name": "uav1",
+  "segment_length": 5, 
+  "height_id": 0,
+  "height": 3
 }

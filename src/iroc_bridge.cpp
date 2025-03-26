@@ -1539,12 +1539,13 @@ void IROCBridge::autonomyTestCallback(const httplib::Request& req, httplib::Resp
     return;
   }
 
-  json       mission;
   std::string     robot_name;
-  const auto succ = parse_vars(json_msg, {{"robot_name", &robot_name}});
+  double          segment_length;
+  int             height_id;
+  double          height;
+  const auto succ = parse_vars(json_msg, {{"robot_name", &robot_name}, {"segment_length", &segment_length}, {"height_id", & height_id}, {"height", &height}});
   if (!succ)
     return;
-
 
   std::scoped_lock  lck(robot_handlers_.mtx);
   auto*             rh_ptr = findRobotHandler(robot_name, robot_handlers_);
@@ -1581,7 +1582,10 @@ void IROCBridge::autonomyTestCallback(const httplib::Request& req, httplib::Resp
   //As we decide that autonomy test will be for one drone at a time, we are only adding the specified robot for the autonomy test.
   std::vector<iroc_fleet_manager::AutonomyTestRobot> mission_robots;
   iroc_fleet_manager::AutonomyTestRobot mission_robot;
-  mission_robot.name = robot_name;
+  mission_robot.name           = robot_name;
+  mission_robot.segment_length = segment_length;
+  mission_robot.height_id      = height_id;
+  mission_robot.height         = height;
   mission_robots.push_back(mission_robot);
 
   AutonomyTestActionServerGoal action_goal;
