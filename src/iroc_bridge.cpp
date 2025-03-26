@@ -11,6 +11,7 @@
 
 #include <nlohmann/json.hpp>
 #include <httplib/httplib.h>
+#include <crow.h>
 
 #include <sensor_msgs/BatteryState.h>
 #include <sensor_msgs/NavSatFix.h>
@@ -31,6 +32,8 @@
 #include <mrs_msgs/SetSafetyBorderSrv.h>
 #include <mrs_msgs/SetSafetyBorderSrvRequest.h>
 #include <mrs_msgs/SetSafetyBorderSrvResponse.h>
+
+#include <mrs_msgs/VelocityReferenceStampedSrv.h>
 
 #include <mrs_msgs/SetObstacleSrv.h>
 #include <mrs_msgs/SetObstacleSrvRequest.h>
@@ -84,9 +87,13 @@ public:
 private:
   ros::NodeHandle nh_;
 
+  // | ---------------------- HTTP REST API --------------------- |
   std::thread                      th_http_srv_;
   httplib::Server                  http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
+
+  std::thread                      th_crow_srv_;
+  crow::SimpleApp                  app_;
 
   struct result_t
   {
@@ -114,6 +121,7 @@ private:
     ros::ServiceClient sc_set_obstacle;
     ros::ServiceClient sc_mission_activation;
     ros::ServiceClient sc_mission_pausing;
+    ros::ServiceClient sc_velocity_reference;
 
     ros::Publisher pub_path;
   };
@@ -174,7 +182,7 @@ private:
   void landHomeCallback(const httplib::Request&, httplib::Response& res);
   void landAllCallback(const httplib::Request&, httplib::Response& res);
   void landHomeAllCallback(const httplib::Request&, httplib::Response& res);
-  void availableRobotsCallback(const httplib::Request&, httplib::Response& res);
+  void remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary);
 
   // some helper method overloads
   template <typename Svc_T>
@@ -313,8 +321,21 @@ void IROCBridge::onInit() {
   const httplib::Server::Handler hdlr_available_robots = std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Get("/available_robots", hdlr_available_robots);
 
-  th_http_srv_ = std::thread([&]() { http_srv_.listen(url, server_port); });
+  CROW_WEBSOCKET_ROUTE(app_, "/robots/<string>/remote-control")
+      .onopen([&](crow::websocket::connection &conn) {
+        ROS_INFO_STREAM("[IROCBridge]: New websocket connection: " << conn.get_remote_ip());
+      })
+      .onclose([&](crow::websocket::connection &conn, const std::string &reason, int code) {
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+      })
+      .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2,
+                           std::placeholders::_3));
+
+  th_http_srv_ = std::thread([&]() { http_srv_.listen("0.0.0.0", server_port); });
   th_http_srv_.detach();
+
+  th_crow_srv_ = std::thread([&]() { app_.port(9000).multithreaded().run(); });
+  th_crow_srv.detach();
 
   // | ----------------------- subscribers ---------------------- |
 
@@ -381,6 +402,8 @@ void IROCBridge::onInit() {
       robot_handler.sc_set_obstacle = nh_.serviceClient<mrs_msgs::SetObstacleSrv>("/" + robot_name + nh_.resolveName("svc/set_obstacle"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
+      robot_handler.sc_velocity_reference = nh_.serviceClient<mrs_msgs::VelocityReferenceStampedSrv>("/" + robot_name + nh_.resolveName("svc/velocity_reference"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/velocity_reference\' -> \'%s\'", robot_handler.sc_velocity_reference.getService().c_str());
 
       // | ----------------------- publishers ----------------------- |
       robot_handler.pub_path = nh_.advertise<mrs_msgs::Path>("/" + robot_name + nh_.resolveName("out/path"), 2);
@@ -1670,6 +1693,86 @@ void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::R
 
   res.body   = json_msg.dump();
   res.status = httplib::StatusCode::Accepted_202;
+}
+//}
+
+/* remoteControlCallback() method //{ */
+/**
+ * @brief Callback that is called when http server receives a message on `/robots/<robot_name>/remote-control` endpoint
+ *
+ * @param conn Crow Websocket connection
+ * @param data Data received from the websocket
+ * @param is_binary Flag if the data is binary
+ * 
+ * @return void
+ */
+void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
+  // Convert and check if the received data is a valid JSON
+  crow::json::rvalue json_data = crow::json::load(data);
+  if (!json_data || !json_data.has("command")) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << json_data);
+    conn.send_text("{\"error\": \"Failed to parse JSON or missing command\"}");
+    return;
+  }
+
+  std::string command = json_data["command"].s();
+  if (command == "message") {
+    ROS_INFO_STREAM("[IROCBridge]: Received message from " << conn.get_remote_ip() << ": " << json_data["data"].s());
+    conn.send_text("{\"status\": \"Ok, received message\"}");
+  } else if (command == "move") {
+    std::scoped_lock lck(robot_handlers_.mtx);
+
+    std::string robot_name = "uav1";
+    crow::json::rvalue movement_data = json_data["data"];
+
+    const float MAX_LINEAR_VELOCITY = 1.0f;
+    const float MAX_ANGULAR_VELOCITY = 1.0f;
+
+    mrs_msgs::VelocityReferenceStampedSrvRequest req;
+    req.reference.header.frame_id = "fcu";
+
+    req.reference.reference.velocity.x = movement_data["x"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.velocity.y = movement_data["y"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.velocity.z = movement_data["z"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.heading = movement_data["heading"].d() * MAX_ANGULAR_VELOCITY;
+    req.reference.reference.use_heading = true;
+
+    auto* robot_handler_ptr = findRobotHandler(robot_name, robot_handlers_);
+    auto res = callService<mrs_msgs::VelocityReferenceStampedSrv>(robot_handler_ptr->sc_velocity_reference, req);
+
+    if (res.success) {
+      conn.send_text("{\"status\": \"Ok, movement command sent\"}");
+    } else {
+      conn.send_text("{\"error\": \"Failed to send movement command: " + res.message + "\"}");
+    }
+  } else if (command == "takeoff") {
+    std::scoped_lock lck(robot_handlers_.mtx);
+
+    std::string robot_name = "uav1";
+
+    const auto result = takeoffAction({robot_name});
+
+    if (result.success) {
+      conn.send_text("{\"status\": \"Ok, takeoff command sent\"}");
+    } else {
+      conn.send_text("{\"error\": \"Failed to send takeoff command: " + result.message + "\"}");
+    }
+  } else if (command == "land") {
+    std::scoped_lock lck(robot_handlers_.mtx);
+
+    std::string robot_name = "uav1";
+
+    const auto result = landAction({robot_name});
+
+    if (result.success) {
+      conn.send_text("{\"status\": \"Ok, land command sent\"}");
+    } else {
+      conn.send_text("{\"error\": \"Failed to send land command: " + result.message + "\"}");
+    }
+  } else {
+    ROS_ERROR_STREAM("[IROCBridge]: Unknown command in websocket message: " << command);
+    conn.send_text("{\"error\": \"Unknown command\"}");
+  }
 }
 //}
 
