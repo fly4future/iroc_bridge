@@ -323,11 +323,13 @@ void IROCBridge::onInit() {
   const httplib::Server::Handler hdlr_available_robots = std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Get("/available_robots", hdlr_available_robots);
 
-  CROW_WEBSOCKET_ROUTE(app_, "/robots/<string>/remote-control")
-      .onopen([&](crow::websocket::connection &conn) {
+  app_.route_dynamic("/robots/<string>/remote-control")
+      .websocket(&app_)
+      .onopen([&](crow::websocket::connection& conn) {
+        ROS_WARN_STREAM("[IROCBridge]: New websocket connection: " << conn.userdata());
         ROS_INFO_STREAM("[IROCBridge]: New websocket connection: " << conn.get_remote_ip());
       })
-      .onclose([&](crow::websocket::connection &conn, const std::string &reason, int code) {
+      .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
       })
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2,

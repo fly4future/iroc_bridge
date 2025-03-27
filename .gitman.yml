@@ -1,9 +1,0 @@
-location: .gitman
-sources:
-  - name: crow
-    type: git
-    repo: git@github.com:CrowCpp/Crow.git
-    rev: v1.2.1.2
-    links:
-      - source: include
-        target: include/crow
