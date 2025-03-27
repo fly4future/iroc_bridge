@@ -22,14 +22,6 @@ set(LIBRARIES
   IROCBridge
   )
 
-include(FetchContent)
-FetchContent_Declare(
-    crow
-    GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
-    GIT_TAG v1.2.1.2
-)
-FetchContent_MakeAvailable(crow)
-
 find_package(catkin REQUIRED COMPONENTS
   ${CATKIN_DEPENDENCIES}
   )
@@ -42,8 +34,7 @@ catkin_package(
 include_directories(
   INCLUDE_DIRS include
   ${catkin_INCLUDE_DIRS}
-  ${crow_SOURCE_DIR}/include
-  include
+  include/crow
   )
 
 # IROCBridge

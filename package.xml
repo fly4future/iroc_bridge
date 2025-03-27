@@ -22,6 +22,7 @@
   <depend>mrs_lib</depend>
   <depend>mrs_mission_manager</depend>
   <depend>iroc_fleet_manager</depend>
+  <depend>asio</depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelets.xml" />
