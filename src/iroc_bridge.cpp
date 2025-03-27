@@ -182,6 +182,8 @@ private:
   void landHomeCallback(const httplib::Request&, httplib::Response& res);
   void landAllCallback(const httplib::Request&, httplib::Response& res);
   void landHomeAllCallback(const httplib::Request&, httplib::Response& res);
+  void availableRobotsCallback(const httplib::Request&, httplib::Response& res);
+
   void remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary);
 
   // some helper method overloads
