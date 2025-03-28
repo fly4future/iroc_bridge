@@ -11,7 +11,9 @@
 
 #include <nlohmann/json.hpp>
 #include <httplib/httplib.h>
+
 #include "crow.h"
+#include "crow/middlewares/cors.h"
 
 #include <sensor_msgs/BatteryState.h>
 #include <sensor_msgs/NavSatFix.h>
@@ -92,8 +94,8 @@ private:
   httplib::Server                  http_srv_;
   std::unique_ptr<httplib::Client> http_client_;
 
-  std::thread                      th_crow_srv_;
-  crow::SimpleApp                  app_;
+  std::thread                  th_crow_srv_;
+  crow::App<crow::CORSHandler> app_;
 
   struct result_t
   {
@@ -1712,10 +1714,16 @@ void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::R
  */
 void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
   // Convert and check if the received data is a valid JSON
-  crow::json::rvalue json_data = crow::json::load(data);
-  if (!json_data || !json_data.has("command")) {
-    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << json_data);
-    conn.send_text("{\"error\": \"Failed to parse JSON or missing command\"}");
+  crow::json::rvalue json_data;
+  try {
+    json_data = crow::json::load(data);
+    if (!json_data || !json_data.has("command")) {
+      throw std::runtime_error("Failed to parse JSON or missing command" + data);
+    }
+  }
+  catch (const std::exception& e) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << e.what());
+    conn.send_text("{\"error\": \"Failed to parse JSON\"}");
     return;
   }
 
