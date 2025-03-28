@@ -1709,7 +1709,7 @@ void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::R
  * @param conn Crow Websocket connection
  * @param data Data received from the websocket
  * @param is_binary Flag if the data is binary
- * 
+ *
  * @return void
  */
 void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
@@ -1720,71 +1720,51 @@ void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const 
     if (!json_data || !json_data.has("command")) {
       throw std::runtime_error("Failed to parse JSON or missing command" + data);
     }
-  }
-  catch (const std::exception& e) {
+  } catch (const std::exception& e) {
     ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << e.what());
     conn.send_text("{\"error\": \"Failed to parse JSON\"}");
     return;
   }
 
-  std::string command = json_data["command"].s();
+  crow::json::wvalue json_response;
+  std::string        command = json_data["command"].s();
   if (command == "message") {
     ROS_INFO_STREAM("[IROCBridge]: Received message from " << conn.get_remote_ip() << ": " << json_data["data"].s());
     conn.send_text("{\"status\": \"Ok, received message\"}");
   } else if (command == "move") {
     std::scoped_lock lck(robot_handlers_.mtx);
 
-    std::string robot_name = "uav1";
+    std::string        robot_name    = "uav1";
     crow::json::rvalue movement_data = json_data["data"];
 
-    const float MAX_LINEAR_VELOCITY = 1.0f;
+    const float MAX_LINEAR_VELOCITY  = 1.0f;
     const float MAX_ANGULAR_VELOCITY = 1.0f;
 
     mrs_msgs::VelocityReferenceStampedSrvRequest req;
     req.reference.header.frame_id = "fcu";
 
-    req.reference.reference.velocity.x = movement_data["x"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.velocity.y = movement_data["y"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.velocity.z = movement_data["z"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.heading = movement_data["heading"].d() * MAX_ANGULAR_VELOCITY;
+    req.reference.reference.velocity.x  = movement_data["x"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.velocity.y  = movement_data["y"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.velocity.z  = movement_data["z"].d() * MAX_LINEAR_VELOCITY;
+    req.reference.reference.heading     = movement_data["heading"].d() * MAX_ANGULAR_VELOCITY;
     req.reference.reference.use_heading = true;
 
     auto* robot_handler_ptr = findRobotHandler(robot_name, robot_handlers_);
-    auto res = callService<mrs_msgs::VelocityReferenceStampedSrv>(robot_handler_ptr->sc_velocity_reference, req);
+    auto  res = callService<mrs_msgs::VelocityReferenceStampedSrv>(robot_handler_ptr->sc_velocity_reference, req);
 
     if (res.success) {
-      conn.send_text("{\"status\": \"Ok, movement command sent\"}");
+      json_response["ok"]      = true;
+      json_response["message"] = "Movement command sent";
     } else {
-      conn.send_text("{\"error\": \"Failed to send movement command: " + res.message + "\"}");
-    }
-  } else if (command == "takeoff") {
-    std::scoped_lock lck(robot_handlers_.mtx);
-
-    std::string robot_name = "uav1";
-
-    const auto result = takeoffAction({robot_name});
-
-    if (result.success) {
-      conn.send_text("{\"status\": \"Ok, takeoff command sent\"}");
-    } else {
-      conn.send_text("{\"error\": \"Failed to send takeoff command: " + result.message + "\"}");
-    }
-  } else if (command == "land") {
-    std::scoped_lock lck(robot_handlers_.mtx);
-
-    std::string robot_name = "uav1";
-
-    const auto result = landAction({robot_name});
-
-    if (result.success) {
-      conn.send_text("{\"status\": \"Ok, land command sent\"}");
-    } else {
-      conn.send_text("{\"error\": \"Failed to send land command: " + result.message + "\"}");
+      json_response["ok"]      = false;
+      json_response["message"] = "Failed to send movement command: " + res.message;
     }
   } else {
     ROS_ERROR_STREAM("[IROCBridge]: Unknown command in websocket message: " << command);
-    conn.send_text("{\"error\": \"Unknown command\"}");
+    json_response["ok"]      = false;
+    json_response["message"] = "Unknown command";
   }
+  conn.send_text(json_response.dump());
 }
 //}
 
