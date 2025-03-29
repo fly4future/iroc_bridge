@@ -176,16 +176,22 @@ private:
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
   void changeFleetMissionStateCallback(const httplib::Request&, httplib::Response& res);
   void changeRobotMissionStateCallback(const httplib::Request&, httplib::Response& res);
-  void takeoffCallback(const httplib::Request&, httplib::Response& res);
-  void takeoffAllCallback(const httplib::Request&, httplib::Response& res);
-  void hoverCallback(const httplib::Request&, httplib::Response& res);
-  void hoverAllCallback(const httplib::Request&, httplib::Response& res);
-  void landCallback(const httplib::Request&, httplib::Response& res);
-  void landHomeCallback(const httplib::Request&, httplib::Response& res);
-  void landAllCallback(const httplib::Request&, httplib::Response& res);
-  void landHomeAllCallback(const httplib::Request&, httplib::Response& res);
-  void availableRobotsCallback(const httplib::Request&, httplib::Response& res);
+  
+  // REST API callbacks
+  crow::response hoverCallback(const crow::request& req);
+  crow::response hoverAllCallback(const crow::request& req);
 
+  crow::response takeoffCallback(const crow::request& req);
+  crow::response takeoffAllCallback(const crow::request& req);
+  
+  crow::response landCallback(const crow::request& req);
+  crow::response landHomeCallback(const crow::request& req);
+  crow::response landAllCallback(const crow::request& req);
+  crow::response landHomeAllCallback(const crow::request& req);
+  
+  crow::response availableRobotsCallback(const crow::request& req);
+
+  // Websocket callbacks
   void remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary);
 
   // some helper method overloads
@@ -298,35 +304,40 @@ void IROCBridge::onInit() {
       std::bind(&IROCBridge::changeRobotMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post(R"(/robots/(\w+)/mission/(start|stop|pause))", hdlr_change_robot_mission);
 
-  const httplib::Server::Handler hdlr_takeoff = std::bind(&IROCBridge::takeoffCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post("/takeoff", hdlr_takeoff);
 
-  const httplib::Server::Handler hdlr_hover = std::bind(&IROCBridge::hoverCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post("/hover", hdlr_hover);
+  // Hover endpoints
+  CROW_ROUTE(app_, "/hover")
+      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::hoverCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_hover_all = std::bind(&IROCBridge::hoverAllCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Get("/hover_all", hdlr_hover_all);
+  CROW_ROUTE(app_, "/hover_all")
+      .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::hoverAllCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_takeoff_all = std::bind(&IROCBridge::takeoffAllCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Get("/takeoff_all", hdlr_takeoff_all);
+  // Takeoff endpoints
+  CROW_ROUTE(app_, "/takeoff")
+      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::takeoffCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_land = std::bind(&IROCBridge::landCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post("/land", hdlr_land);
+  CROW_ROUTE(app_, "/takeoff_all")
+      .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::takeoffAllCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_land_home = std::bind(&IROCBridge::landHomeCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post("/land_home", hdlr_land_home);
+  // Land endpoints
+  CROW_ROUTE(app_, "/land")
+      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::landCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_land_all = std::bind(&IROCBridge::landAllCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Get("/land_all", hdlr_land_all);
+  CROW_ROUTE(app_, "/land_home")
+      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::landHomeCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_land_home_all = std::bind(&IROCBridge::landHomeAllCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Get("/land_home_all", hdlr_land_home_all);
+  CROW_ROUTE(app_, "/land_all")
+      .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::landAllCallback, this, std::placeholders::_1));
 
-  const httplib::Server::Handler hdlr_available_robots = std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Get("/available_robots", hdlr_available_robots);
+  CROW_ROUTE(app_, "/land_home_all")
+      .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::landHomeAllCallback, this, std::placeholders::_1));
 
-  app_.route_dynamic("/robots/<string>/remote-control")
-      .websocket(&app_)
+  // Available robots endpoint
+  CROW_ROUTE(app_, "/available_robots")
+      .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1));
+
+  // Remote control websocket
+  CROW_WEBSOCKET_ROUTE(app_, "/robots/<string>/remote-control")
       .onopen([&](crow::websocket::connection& conn) {
         ROS_WARN_STREAM("[IROCBridge]: New websocket connection: " << conn.userdata());
         ROS_INFO_STREAM("[IROCBridge]: New websocket connection: " << conn.get_remote_ip());
@@ -337,10 +348,7 @@ void IROCBridge::onInit() {
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2,
                            std::placeholders::_3));
 
-  th_http_srv_ = std::thread([&]() { http_srv_.listen("0.0.0.0", server_port); });
-  th_http_srv_.detach();
-
-  th_crow_srv_ = std::thread([&]() { app_.port(9000).multithreaded().run(); });
+  th_crow_srv_ = std::thread([&]() { app_.port(server_port).multithreaded().run(); });
   th_crow_srv_.detach();
 
   // | ----------------------- subscribers ---------------------- |
@@ -482,7 +490,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 //}
 
 // --------------------------------------------------------------
-// |                  acition client callbacks                  |
+// |                  action client callbacks                   |
 // --------------------------------------------------------------
 
 /* waypointMissionActiveCallback //{ */
@@ -1490,215 +1498,222 @@ void IROCBridge::changeRobotMissionStateCallback(const httplib::Request& req, ht
 }
 //}
 
-/* takeoffCallback() method //{ */
-void IROCBridge::takeoffCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a takeoff message JSON -> ROS.");
-  res.status = httplib::StatusCode::UnprocessableContent_422;
-  json json_msg;
-  try {
-    json_msg = json::parse(req.body);
-  }
-  catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    return;
-  }
-
-  std::string type;
-
-  json       robot_names;
-  const auto succ = parse_vars(json_msg, {{"robot_names", &robot_names}});
-  if (!succ)
-    return;
-
-  if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
-    return;
-  }
-
-  const auto result = takeoffAction(robot_names);
-
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-}
-//}
-
 /* hoverCallback() method //{ */
-void IROCBridge::hoverCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a hover message JSON -> ROS.");
-  res.status = httplib::StatusCode::UnprocessableContent_422;
-  json json_msg;
-  try {
-    json_msg = json::parse(req.body);
-  }
-  catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    return;
-  }
-
-  std::string type;
-
-  json       robot_names;
-  const auto succ = parse_vars(json_msg, {{"robot_names", &robot_names}});
-  if (!succ)
-    return;
-
-  if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
-    return;
-  }
-
-  const auto result = hoverAction(robot_names);
-
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-}
-//}
-
-/* landCallback() method //{ */
-void IROCBridge::landCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a land message JSON -> ROS.");
-  res.status = httplib::StatusCode::UnprocessableContent_422;
-  json json_msg;
-  try {
-    json_msg = json::parse(req.body);
-  }
-  catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    return;
-  }
-
-  std::string type;
-
-  json       robot_names;
-  const auto succ = parse_vars(json_msg, {{"robot_names", &robot_names}});
-  if (!succ)
-    return;
-
-  if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
-    return;
-  }
-
-  const auto result = landAction(robot_names);
-
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-}
-//}
-
-/* landHomeCallback() method //{ */
-void IROCBridge::landHomeCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a land home message JSON -> ROS.");
-  res.status = httplib::StatusCode::UnprocessableContent_422;
-  json json_msg;
-  try {
-    json_msg = json::parse(req.body);
-  }
-  catch (const json::exception& e) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad json input: " << e.what());
-    return;
-  }
-
-  std::string type;
-
-  json       robot_names;
-  const auto succ = parse_vars(json_msg, {{"robot_names", &robot_names}});
-  if (!succ)
-    return;
-
-  if (!robot_names.is_array()) {
-    ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad \'robot_names\' input: Expected an array.");
-    return;
-  }
-
-  const auto result = landHomeAction(robot_names);
-
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
-}
-//}
-
-/* takeoffAllCallback() method //{ */
-void IROCBridge::takeoffAllCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received takeoff all request.");
+/**
+ * @brief Callback that is called when http server receives a message on `/hover` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::hoverCallback(const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
+  try {
+    crow::json::rvalue json_msg = crow::json::load(req.body);
+    if (!json_msg || !json_msg.has("robot_names"))
+      throw std::runtime_error("Failed to parse JSON or missing robot_names" + req.body);
 
-  const auto result = takeoffAction(robot_names);
+    for (const auto& el : json_msg["robot_names"]) robot_names.push_back(el.s());
+  } catch (const std::exception& e) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from message: " << e.what());
+    return crow::response(422, "Bad JSON input");  // 422 Unprocessable Content
+  }
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
+  const auto result = hoverAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
 }
 //}
 
 /* hoverAllCallback() method //{ */
-void IROCBridge::hoverAllCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received hover all request.");
+/**
+ * @brief Callback that is called when http server receives a message on `/hover_all` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
+  for (const auto& rh : robot_handlers_.handlers) robot_names.push_back(rh.robot_name);
 
   const auto result = hoverAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
+}
+//}
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
+/* takeoffCallback() method //{ */
+/**
+ * @brief Callback that is called when http server receives a message on `/takeoff` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::takeoffCallback(const crow::request& req) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  try {
+    crow::json::rvalue json_msg = crow::json::load(req.body);
+    if (!json_msg || !json_msg.has("robot_names"))
+      throw std::runtime_error("Failed to parse JSON or missing robot_names" + req.body);
+
+    for (const auto& el : json_msg["robot_names"]) robot_names.push_back(el.s());
+  } catch (const std::exception& e) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from message: " << e.what());
+    return crow::response(422, "Bad JSON input");  // 422 Unprocessable Content
+  }
+
+  const auto result = takeoffAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
+}
+//}
+
+/* takeoffAllCallback() method //{ */
+/**
+ * @brief Callback that is called when http server receives a message on `/takeoff_all` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::takeoffAllCallback([[maybe_unused]] const crow::request& req) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  robot_names.reserve(robot_handlers_.handlers.size());
+  for (const auto& rh : robot_handlers_.handlers) robot_names.push_back(rh.robot_name);
+
+  const auto result = takeoffAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
+}
+//}
+
+/* landCallback() method //{ */
+/**
+ * @brief Callback that is called when http server receives a message on `/land` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::landCallback(const crow::request& req) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  try {
+    crow::json::rvalue json_msg = crow::json::load(req.body);
+    if (!json_msg || !json_msg.has("robot_names"))
+      throw std::runtime_error("Failed to parse JSON or missing robot_names" + req.body);
+
+    for (const auto& el : json_msg["robot_names"]) robot_names.push_back(el.s());
+  } catch (const std::exception& e) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from message: " << e.what());
+    return crow::response(422, "Bad JSON input");  // 422 Unprocessable Content
+  }
+
+  const auto result = landAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
+}
+//}
+
+/* landHomeCallback() method //{ */
+/**
+ * @brief Callback that is called when http server receives a message on `/land_home` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::landHomeCallback(const crow::request& req) {
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  try {
+    crow::json::rvalue json_msg = crow::json::load(req.body);
+    if (!json_msg || !json_msg.has("robot_names"))
+      throw std::runtime_error("Failed to parse JSON or missing robot_names" + req.body);
+
+    for (const auto& el : json_msg["robot_names"]) robot_names.push_back(el.s());
+  } catch (const std::exception& e) {
+    ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from message: " << e.what());
+    return crow::response(422, "Bad JSON input");  // 422 Unprocessable Content
+  }
+
+  const auto result = landHomeAction(robot_names);
+  return crow::response(crow::status::ACCEPTED, result.message);
 }
 //}
 
 /* landAllCallback() method //{ */
-void IROCBridge::landAllCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received land all request.");
+/**
+ * @brief Callback that is called when http server receives a message on `/land_home_all` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::landAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
+  for (const auto& rh : robot_handlers_.handlers) robot_names.push_back(rh.robot_name);
 
   const auto result = landAction(robot_names);
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
+  crow::json::wvalue json_msg;
+  json_msg["message"] = result.message;
+
+  return crow::response(crow::status::ACCEPTED, json_msg.dump());
 }
-//}
 
 /* landHomeAllCallback() method //{ */
-void IROCBridge::landHomeAllCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received landHome all request.");
+/**
+ * @brief Callback that is called when http server receives a message on `/land_home_all` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::landHomeAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
+  for (const auto& rh : robot_handlers_.handlers) robot_names.push_back(rh.robot_name);
 
   const auto result = landHomeAction(robot_names);
 
-  res.status = httplib::StatusCode::Accepted_202;
-  res.body   = result.message;
+  crow::json::wvalue json_msg;
+  json_msg["message"] = result.message;
+
+  return crow::response(crow::status::ACCEPTED, json_msg.dump());
 }
 //}
 
 /* availableRobotsCallback() method //{ */
-void IROCBridge::availableRobotsCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Received request for available robots");
-  auto json_robots = json::array();
-  for (const auto& rh : robot_handlers_.handlers)
-    json_robots.push_back(rh.robot_name);
+/**
+ * @brief Callback that is called when http server receives a message on `/available_robots` endpoint
+ *
+ * @param req Crow request
+ *
+ * @return res Crow response
+ */
+crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::request& req) {
+  std::vector<std::string> robot_names;
+  robot_names.reserve(robot_handlers_.handlers.size());
+  for (const auto& rh : robot_handlers_.handlers) robot_names.push_back(rh.robot_name);
 
-  const json json_msg = {
-      {"robot_names", json_robots},
-  };
+  crow::json::wvalue json_msg;
+  json_msg["robot_names"] = robot_names;
 
-  res.body   = json_msg.dump();
-  res.status = httplib::StatusCode::Accepted_202;
+  return crow::response(crow::status::ACCEPTED, json_msg.dump());
 }
 //}
 
