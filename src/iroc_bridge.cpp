@@ -103,6 +103,10 @@ private:
     std::string message;
   };
 
+  // | ---------------------- ROS parameters ------------------ |
+  double max_linear_speed_;
+  double max_heading_rate_;
+
   // | ---------------------- ROS subscribers --------------------- |
 
   struct robot_handler_t
@@ -252,6 +256,9 @@ void IROCBridge::onInit() {
   const auto server_port = param_loader.loadParam2<int>("server_port");
 
   const auto robot_names = param_loader.loadParam2<std::vector<std::string>>("network/robot_names");
+
+  max_linear_speed_  = param_loader.loadParam2<double>("remote_control_limits/max_linear_speed");
+  max_heading_rate_ = param_loader.loadParam2<double>("remote_control_limits/max_heading_rate");
 
   // Remove ground-station hostname from robot names
 
@@ -785,6 +792,8 @@ void IROCBridge::routine_death_check() {
     period.sleep();
   ROS_INFO("[IROCBridge]: Stopping the HTTP server.");
   http_srv_.stop();
+  app_.stop();
+
   ROS_INFO("[IROCBridge]: Stopping the HTTP client.");
   http_client_->stop();
 }
@@ -1737,17 +1746,14 @@ void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const 
     std::string        robot_name    = "uav1";
     crow::json::rvalue movement_data = json_data["data"];
 
-    const float MAX_LINEAR_VELOCITY  = 1.0f;
-    const float MAX_ANGULAR_VELOCITY = 1.0f;
-
     mrs_msgs::VelocityReferenceStampedSrvRequest req;
-    req.reference.header.frame_id = "fcu";
+    req.reference.header.frame_id = "fcu_untilted";
 
-    req.reference.reference.velocity.x  = movement_data["x"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.velocity.y  = movement_data["y"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.velocity.z  = movement_data["z"].d() * MAX_LINEAR_VELOCITY;
-    req.reference.reference.heading     = movement_data["heading"].d() * MAX_ANGULAR_VELOCITY;
-    req.reference.reference.use_heading = true;
+    req.reference.reference.velocity.x       = movement_data["x"].d() * max_linear_speed_;
+    req.reference.reference.velocity.y       = movement_data["y"].d() * max_linear_speed_;
+    req.reference.reference.velocity.z       = movement_data["z"].d() * max_linear_speed_;
+    req.reference.reference.heading_rate     = movement_data["heading"].d() * max_heading_rate_;
+    req.reference.reference.use_heading_rate = true;
 
     auto* robot_handler_ptr = findRobotHandler(robot_name, robot_handlers_);
     auto  res = callService<mrs_msgs::VelocityReferenceStampedSrv>(robot_handler_ptr->sc_velocity_reference, req);
