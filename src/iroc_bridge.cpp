@@ -1733,7 +1733,7 @@ void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const 
   try {
     json_data = crow::json::load(data);
     if (!json_data || !json_data.has("command") || !json_data.has("data")) {
-      throw std::runtime_error("Failed to parse JSON or missing command/data" + data);
+      throw std::runtime_error("Failed to parse JSON or missing command/data: " + data);
     }
   } catch (const std::exception& e) {
     ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << e.what());
