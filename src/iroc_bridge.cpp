@@ -337,7 +337,7 @@ void IROCBridge::onInit() {
       .methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1));
 
   // Remote control websocket
-  CROW_WEBSOCKET_ROUTE(app_, "/robots/<string>/remote-control")
+  CROW_WEBSOCKET_ROUTE(app_, "/rc")
       .onopen([&](crow::websocket::connection& conn) {
         ROS_WARN_STREAM("[IROCBridge]: New websocket connection: " << conn.userdata());
         ROS_INFO_STREAM("[IROCBridge]: New websocket connection: " << conn.get_remote_ip());
@@ -1732,8 +1732,8 @@ void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const 
   crow::json::rvalue json_data;
   try {
     json_data = crow::json::load(data);
-    if (!json_data || !json_data.has("command")) {
-      throw std::runtime_error("Failed to parse JSON or missing command" + data);
+    if (!json_data || !json_data.has("command") || !json_data.has("data")) {
+      throw std::runtime_error("Failed to parse JSON or missing command/data" + data);
     }
   } catch (const std::exception& e) {
     ROS_ERROR_STREAM("[IROCBridge]: Failed to parse JSON from websocket message: " << e.what());
@@ -1749,7 +1749,21 @@ void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const 
   } else if (command == "move") {
     std::scoped_lock lck(robot_handlers_.mtx);
 
-    std::string        robot_name    = "uav1";
+    // Robot id validation
+    if (!json_data.has("robot_name")) {
+      ROS_WARN_STREAM("[IROCBridge]: Missing robot_id in websocket message: " << data);
+      conn.send_text("{\"error\": \"Missing robot_id\"}");
+      return;
+    }
+
+    std::string robot_name = json_data["robot_name"].s();
+    if (!std::any_of(robot_handlers_.handlers.begin(), robot_handlers_.handlers.end(),
+                     [robot_name](const robot_handler_t& rh) { return rh.robot_name == robot_name; })) {
+      ROS_WARN_STREAM("[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+      conn.send_text("{\"error\": \"Robot not found\"}");
+      return;
+    }
+
     crow::json::rvalue movement_data = json_data["data"];
 
     const float MAX_LINEAR_VELOCITY  = 1.0f;
