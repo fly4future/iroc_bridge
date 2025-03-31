@@ -67,6 +67,7 @@ using vec4_t = Eigen::Vector4d;
 using namespace actionlib;
 
 typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
+typedef SimpleActionClient<iroc_fleet_manager::AutonomyTestAction> AutonomyTestClient;
 typedef iroc_fleet_manager::WaypointFleetManagerGoal FleetManagerActionServerGoal;
 //Autonomy test goal
 typedef iroc_fleet_manager::AutonomyTestGoal AutonomyTestActionServerGoal;
