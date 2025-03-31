@@ -43,7 +43,6 @@
 #include <mrs_robot_diagnostics/UavInfo.h>
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 
-#include <mrs_mission_manager/waypointMissionAction.h>
 #include <iroc_fleet_manager/WaypointFleetManagerAction.h>
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
@@ -66,11 +65,7 @@ using vec4_t = Eigen::Vector4d;
 
 using namespace actionlib;
 
-// to remove
-/* typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction>               MissionManagerClient; */
 typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
-// to remove
-/* typedef mrs_mission_manager::waypointMissionGoal                                     ActionServerGoal; */
 typedef iroc_fleet_manager::WaypointFleetManagerGoal FleetManagerActionServerGoal;
 
 typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
@@ -477,7 +472,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
   if (result == NULL) {
     ROS_WARN(
-        "[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
+        "[IROCBridge]: Probably fleet_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
         "restarted need to upload a new mission!");
     const json json_msg = {
         {"mission_result", "Fleet manager died in ongoing mission"},
