@@ -175,9 +175,10 @@ private:
   void setObstacleCallback(const httplib::Request&, httplib::Response& res);
   void waypointMissionCallback(const httplib::Request&, httplib::Response& res);
   void changeFleetMissionStateCallback(const httplib::Request&, httplib::Response& res);
-  void changeRobotMissionStateCallback(const httplib::Request&, httplib::Response& res);
-  
   // REST API callbacks
+  crow::response changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name,
+                                                 const std::string& type);
+
   crow::response hoverCallback(const crow::request& req);
   crow::response hoverAllCallback(const crow::request& req);
 
@@ -295,15 +296,11 @@ void IROCBridge::onInit() {
       std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1, std::placeholders::_2);
   http_srv_.Post("/set_waypoint_mission", hdlr_set_waypoint_mission);
 
-  const httplib::Server::Handler hdlr_change_fleet_mission_state =
-      std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
-  // Using raw string for the creation of the endpoint
-  http_srv_.Post(R"(/fleet/mission/(start|stop|pause))", hdlr_change_fleet_mission_state);
-
-  const httplib::Server::Handler hdlr_change_robot_mission =
-      std::bind(&IROCBridge::changeRobotMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2);
-  http_srv_.Post(R"(/robots/(\w+)/mission/(start|stop|pause))", hdlr_change_robot_mission);
-
+  // Missions
+  // CROW_REGEX_ROUTE(app_, R"(/robots/(\w+)/mission/(start|stop|pause))")
+  CROW_ROUTE(app_, "/robots/<string>/mission/<string>")
+      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::changeRobotMissionStateCallback, this,
+                                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
   // Hover endpoints
   CROW_ROUTE(app_, "/hover")
@@ -1474,37 +1471,50 @@ void IROCBridge::changeFleetMissionStateCallback(const httplib::Request& req, ht
 //}
 
 /* changeRobotMissionStateCallback() method //{ */
-void IROCBridge::changeRobotMissionStateCallback(const httplib::Request& req, httplib::Response& res) {
-  ROS_INFO_STREAM("[IROCBridge]: Parsing a changeRobotMissionStateCallback message JSON -> ROS.");
 
-  auto robot_name = req.matches[1];
-  auto type       = req.matches[2];
+/**
+ * \brief Callback that changes the mission state of a specific robot.
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name,
+                                                           const std::string& type) {
+  std::scoped_lock lck(robot_handlers_.mtx);
 
-  std::stringstream                              ss;
+  // Input validation
+  if (type != "start" && type != "stop" && type != "pause") return crow::response(crow::status::NOT_FOUND);
+  if (!std::any_of(robot_handlers_.handlers.begin(), robot_handlers_.handlers.end(),
+                   [&robot_name](const auto& rh) { return rh.robot_name == robot_name; }))
+    return crow::response(crow::status::NOT_FOUND, "Robot not found");
+
+  crow::json::wvalue json_msg;
+
   iroc_fleet_manager::ChangeRobotMissionStateSrv ros_srv;
   ros_srv.request.robot_name = robot_name;
   ros_srv.request.type       = type;
 
-  const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
+  const auto resp =
+      callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
+
   if (!resp.success) {
-    ss << "Call was not successful with message: " << resp.message << "\n";
-    res.status = httplib::StatusCode::InternalServerError_500;
+    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    ROS_ERROR_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+
+    return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
   } else {
-    ss << "Call successfull\n";
-    res.status = httplib::StatusCode::Accepted_202;
+    json_msg["message"] = "Call successful";
+    return crow::response(crow::status::ACCEPTED, json_msg.dump());
   }
-  json json_msg = {{"message", ss.str()}};
-  res.set_content(json_msg.dump(), "application/json");
 }
-//}
 
 /* hoverCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/hover` endpoint
+ * \brief Callback that sends a `hover` command to the robots specified in the request body.
+ * \param req Crow request
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \return res Crow response
  */
 crow::response IROCBridge::hoverCallback(const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1527,12 +1537,12 @@ crow::response IROCBridge::hoverCallback(const crow::request& req) {
 //}
 
 /* hoverAllCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/hover_all` endpoint
+ * \brief Callback that sends a `hover` command to all robots in the fleet.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1547,12 +1557,12 @@ crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request
 //}
 
 /* takeoffCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/takeoff` endpoint
+ * \brief Callback that sends a `takeoff` command to the robots specified in the request body.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::takeoffCallback(const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1575,12 +1585,12 @@ crow::response IROCBridge::takeoffCallback(const crow::request& req) {
 //}
 
 /* takeoffAllCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/takeoff_all` endpoint
+ * \brief Callback that sends a `takeoff` command to all robots in the fleet.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::takeoffAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1595,12 +1605,12 @@ crow::response IROCBridge::takeoffAllCallback([[maybe_unused]] const crow::reque
 //}
 
 /* landCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/land` endpoint
+ * \brief Callback that sends a `land` command to the robots specified in the request body.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::landCallback(const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1623,12 +1633,12 @@ crow::response IROCBridge::landCallback(const crow::request& req) {
 //}
 
 /* landHomeCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/land_home` endpoint
+ * \brief Callback that sends a `land` command to the robots specified in the request body.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::landHomeCallback(const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1651,12 +1661,12 @@ crow::response IROCBridge::landHomeCallback(const crow::request& req) {
 //}
 
 /* landAllCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/land_home_all` endpoint
+ * \brief Callback that sends a `land` command to the robots specified in the request body.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::landAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1674,12 +1684,12 @@ crow::response IROCBridge::landAllCallback([[maybe_unused]] const crow::request&
 }
 
 /* landHomeAllCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/land_home_all` endpoint
+ * \brief Callback that sends a `land_home` command to all robots in the fleet.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::landHomeAllCallback([[maybe_unused]] const crow::request& req) {
   std::scoped_lock lck(robot_handlers_.mtx);
@@ -1698,12 +1708,12 @@ crow::response IROCBridge::landHomeAllCallback([[maybe_unused]] const crow::requ
 //}
 
 /* availableRobotsCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/available_robots` endpoint
+ * \brief Callback that returns a list of available robot names in the fleet based on `robot_handlers_` vector.
  *
- * @param req Crow request
- *
- * @return res Crow response
+ * \param req Crow request
+ * \return res Crow response
  */
 crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::request& req) {
   std::vector<std::string> robot_names;
@@ -1718,14 +1728,34 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
 //}
 
 /* remoteControlCallback() method //{ */
+
 /**
- * @brief Callback that is called when http server receives a message on `/robots/<robot_name>/remote-control` endpoint
+ * \brief Callback that is called when a websocket message is received, it checks the command and sends it to the robot
+ * through a
+ * [`mrs_msgs::VelocityReferenceStampedSrv`](https://ctu-mrs.github.io/mrs_msgs/srv/VelocityReferenceStampedSrv.html)
+ * service.
  *
- * @param conn Crow Websocket connection
- * @param data Data received from the websocket
- * @param is_binary Flag if the data is binary
+ * \param conn Crow Websocket connection
+ * \param data Data received from the websocket. 
+ * \param is_binary Flag if the data is binary
+ * \return void
  *
- * @return void
+ * \note The velocity values are normalized between -1.0 and 1.0, where:
+ * - For `x`, `y`, `z`: Values are multiplied by MAX_LINEAR_VELOCITY (1.0 m/s)
+ * - For `heading`: Values are multiplied by MAX_ANGULAR_VELOCITY (1.0 rad/s)
+ * 
+ * **Command Structure:**
+ * - `{"command": "message", "data": "Hello, world!"}`
+ * - `{"command": "move", "robot_name": "robot_1", "data": {"x": 0.5, "y": 0.5, "z": 0.5, "heading": 0.5}}`
+ * 
+ * **Response Messages:**
+ * - For successful `message` command: `{"status": "Ok, received message"}`
+ * - For successful `move` command: `{"ok": true, "message": "Movement command sent"}`
+ * - For JSON parsing errors: `{"error": "Failed to parse JSON"}`
+ * - For missing robot name: `{"error": "Missing robot_id"}`
+ * - For invalid robot name: `{"error": "Robot not found"}`
+ * - For unknown commands: `{"ok": false, "message": "Unknown command"}`
+ * - For movement command failures: `{"ok": false, "message": "Failed to send movement command: [error details]"}`
  */
 void IROCBridge::remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
   // Convert and check if the received data is a valid JSON
