@@ -1750,8 +1750,8 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
  * \return void
  *
  * \note The velocity values are normalized between -1.0 and 1.0, where:
- * - For `x`, `y`, `z`: Values are multiplied by MAX_LINEAR_VELOCITY (1.0 m/s)
- * - For `heading`: Values are multiplied by MAX_ANGULAR_VELOCITY (1.0 rad/s)
+ * - For `x`, `y`, `z`: Values are multiplied by max_linear_speed_ ros param
+ * - For `heading`: Values are multiplied by max_heading_rate_ ros param
  * 
  * **Command Structure:**
  * - `{"command": "message", "data": "Hello, world!"}`
