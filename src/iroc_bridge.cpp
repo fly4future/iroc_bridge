@@ -1585,8 +1585,6 @@ void IROCBridge::autonomyTestCallback(const httplib::Request& req, httplib::Resp
   iroc_fleet_manager::AutonomyTestRobot mission_robot;
   mission_robot.name           = robot_name;
   mission_robot.segment_length = segment_length;
-  mission_robot.height_id      = height_id;
-  mission_robot.height         = height;
   mission_robots.push_back(mission_robot);
 
   AutonomyTestActionServerGoal action_goal;
