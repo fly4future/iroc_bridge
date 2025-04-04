@@ -42,6 +42,7 @@
 #include <mrs_robot_diagnostics/CollisionAvoidanceInfo.h>
 #include <mrs_robot_diagnostics/UavInfo.h>
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
+#include <mrs_robot_diagnostics/enums/robot_type.h>
 
 #include <iroc_fleet_manager/WaypointFleetManagerAction.h>
 #include <iroc_fleet_manager/AutonomyTestAction.h>
@@ -49,8 +50,6 @@
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
 
 #include "iroc_bridge/json_var_parser.h"
-#include <mrs_robot_diagnostics/parsing_functions.h>
-
 #include <unistd.h>
 #include <iostream>
 
