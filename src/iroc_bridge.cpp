@@ -9,7 +9,6 @@
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/subscribe_handler.h>
 
-#include <nlohmann/json.hpp>
 #include <httplib/httplib.h>
 
 #include "crow.h"
@@ -53,7 +52,6 @@
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
 
-#include "iroc_bridge/json_var_parser.h"
 #include <mrs_robot_diagnostics/parsing_functions.h>
 
 #include <unistd.h>

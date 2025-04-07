@@ -34,7 +34,6 @@ catkin_package(
 include_directories(
   INCLUDE_DIRS include
   ${catkin_INCLUDE_DIRS}
-  include/crow
   )
 
 # IROCBridge
@@ -42,7 +41,6 @@ include_directories(
 ## Declare a C++ library
 add_library(IROCBridge
   src/iroc_bridge.cpp
-  src/json_var_parser.cpp
   )
 
 add_dependencies(IROCBridge
