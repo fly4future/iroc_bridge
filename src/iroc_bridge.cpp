@@ -13,6 +13,7 @@
 
 #include "crow.h"
 #include "crow/middlewares/cors.h"
+#include "crow/json.h"
 
 #include <sensor_msgs/BatteryState.h>
 #include <sensor_msgs/NavSatFix.h>
@@ -46,13 +47,12 @@
 #include <mrs_robot_diagnostics/CollisionAvoidanceInfo.h>
 #include <mrs_robot_diagnostics/UavInfo.h>
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
+#include <mrs_robot_diagnostics/enums/robot_type.h>
 
-#include <mrs_mission_manager/waypointMissionAction.h>
 #include <iroc_fleet_manager/WaypointFleetManagerAction.h>
+#include <iroc_fleet_manager/AutonomyTestAction.h>
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
-
-#include <mrs_robot_diagnostics/parsing_functions.h>
 
 #include <unistd.h>
 #include <iostream>
@@ -62,20 +62,18 @@
 namespace iroc_bridge
 {
 
-using json = nlohmann::json;
+// using json = crow::json::wvalue; 
 
 using vec3_t = Eigen::Vector3d;
 using vec4_t = Eigen::Vector4d;
 
 using namespace actionlib;
 
-// to remove
-/* typedef SimpleActionClient<mrs_mission_manager::waypointMissionAction>               MissionManagerClient; */
 typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
-// to remove
-/* typedef mrs_mission_manager::waypointMissionGoal                                     ActionServerGoal; */
+typedef SimpleActionClient<iroc_fleet_manager::AutonomyTestAction> AutonomyTestClient;
 typedef iroc_fleet_manager::WaypointFleetManagerGoal FleetManagerActionServerGoal;
-
+//Autonomy test goal
+typedef iroc_fleet_manager::AutonomyTestGoal AutonomyTestActionServerGoal;
 typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
 
 /* class IROCBridge //{ */
@@ -143,14 +141,23 @@ private:
   // | ----------------------- ROS Clients ----------------------- |
   ros::ServiceClient sc_change_fleet_mission_state;
   ros::ServiceClient sc_change_robot_mission_state;
+  ros::ServiceClient sc_change_autonomy_test_state;
+  std::string        latest_mission_type_;
 
   // | ----------------- action client callbacks ---------------- |
 
+  //Waypoint mission
   void waypointMissionActiveCallback(const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots);
   void waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result,
                                    const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots);
   void waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& result,
                                        const std::vector<iroc_fleet_manager::WaypointMissionRobot>&    robot);
+  //Autonomy test
+  void AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot);
 
   // | ------------------ Additional functions ------------------ |
 
@@ -161,7 +168,8 @@ private:
   void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string& robot_name);
   void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info, const std::string& robot_name);
 
-  void             sendJsonMessage(const std::string& msg_type, const json& json_msg);
+  // void             sendJsonMessage(const std::string& msg_type, const json& json_msg);
+  void             sendJsonMessage(const std::string& msg_type,crow::json::wvalue& json_msg);
   robot_handler_t* findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
 
   result_t takeoffAction(const std::vector<std::string>& robot_names);
@@ -176,6 +184,7 @@ private:
   crow::response setSafetyBorderCallback(const crow::request& req);
   crow::response setObstacleCallback(const crow::request& req);
   crow::response waypointMissionCallback(const crow::request& req);
+  crow::response autonomyTestCallback(const crow::request& req);
 
   crow::response changeFleetMissionStateCallback(const crow::request& req, const std::string& type);
   crow::response changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name, const std::string& type);
@@ -211,6 +220,8 @@ private:
   bool active_border_callback_;
 
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
+  std::unique_ptr<AutonomyTestClient>         autonomy_test_client_ptr_;
+
 };
 //}
 
@@ -292,6 +303,7 @@ void IROCBridge::onInit() {
   CROW_ROUTE(http_srv_, "/set_safety_border").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1));
   CROW_ROUTE(http_srv_, "/set_obstacle").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1));
   CROW_ROUTE(http_srv_, "/set_waypoint_mission").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/set_autonomy_test").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1));
 
   // Missions
   // CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
@@ -423,11 +435,21 @@ void IROCBridge::onInit() {
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
            sc_change_robot_mission_state.getService().c_str());
 
+  sc_change_autonomy_test_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_autonomy_test_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_autonomy_test_state\' -> \'%s\'",
+           sc_change_autonomy_test_state.getService().c_str());
+
   /* // | --------------------- action clients --------------------- | */
+  //Fleet Manager
+  //Waypoint Mission
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
   action_client_ptr_                             = std::make_unique<WaypointFleetManagerClient>(waypoint_action_client_topic, false);
   ROS_INFO("[IROCBridge]: Created action client on topic \'ac/waypoint_mission\' -> \'%s\'", waypoint_action_client_topic.c_str());
 
+  //Autonomy test
+  const std::string autonomy_test_client_topic = nh_.resolveName("ac/autonomy_test");
+  autonomy_test_client_ptr_                    = std::make_unique<AutonomyTestClient>(autonomy_test_client_topic, false);
+  ROS_INFO("[IROCBridge]: Created action client on topic \'ac/autonomy_test\' -> \'%s\'", autonomy_test_client_topic.c_str());
   // | ------------------------- timers ------------------------- |
 
   timer_main_     = nh_.createTimer(ros::Rate(main_timer_rate), &IROCBridge::timerMain, this);
@@ -501,11 +523,13 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 
   if (result == NULL) {
     ROS_WARN(
-        "[IROCBridge]: Probably mission_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
+        "[IROCBridge]: Probably fleet handler died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
         "restarted need to upload a new mission!");
-    const json json_msg = {
+    
+    // Create JSON with Crow
+    crow::json::wvalue json_msg = {
         {"mission_result", "Fleet manager died in ongoing mission"},
-        {"mission_success", false},
+        {"mission_success", false}
     };
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
@@ -515,20 +539,24 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
       ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
     }
 
-    std::vector<json> result_msgs;
-    for (const auto& message : result->messages) {
-      json json_msg= {
-        {"message", message},
+    // Create an array of message objects
+    crow::json::wvalue result_msgs = crow::json::wvalue::list();
+    for (size_t i = 0; i < result->messages.size(); i++) {
+      crow::json::wvalue msg_obj = {
+        {"message", result->messages[i]}
       };
-      result_msgs.emplace_back(json_msg);
+      result_msgs[i] = std::move(msg_obj);
     }
 
-    const json json_msg = {
-        {"mission_result", result_msgs}, {"mission_success", result->success}};
+    // Create the main JSON object
+    crow::json::wvalue json_msg = {
+        {"mission_success", result->success}
+    };
+    json_msg["mission_result"] = std::move(result_msgs);
+    
     sendJsonMessage("WaypointMissionDone", json_msg);
   }
 }
-
 //}
 
 /* waypointMissionFeedbackCallback //{ */
@@ -540,12 +568,16 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
    */
 
   /* ROS_INFO_STREAM("[IROCBridge]:Feedback callback: Action client state " << action_client_ptr_->getState().toString()); */
-  auto              robots_feedback = feedback->info.robots_feedback;
-  std::vector<json> json_msgs;
+  auto robots_feedback = feedback->info.robots_feedback;
+  
+  // Create a list for robot feedback
+  crow::json::wvalue json_msgs = crow::json::wvalue::list();
 
   // Collect each robot feedback and create a json for each
-  for (const auto& rfb : robots_feedback) {
-    json json_msg = {
+  for (size_t i = 0; i < robots_feedback.size(); i++) {
+    const auto& rfb = robots_feedback[i];
+    
+    crow::json::wvalue robot_json = {
         {"robot_name", rfb.name},
         {"message", rfb.message},
         {"mission_progress", rfb.mission_progress},
@@ -554,19 +586,133 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
         {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
         {"goal_progress", rfb.goal_progress},
         {"distance_to_finish", rfb.distance_to_finish},
-        {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time},
+        {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
     };
-    json_msgs.emplace_back(json_msg);
+    
+    // Add to the list at index i
+    json_msgs[i] = std::move(robot_json);
   }
 
-  const json json_msg = {
-      {"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
+  // Create the main JSON message
+  crow::json::wvalue json_msg = {
+      {"progress", feedback->info.progress}, 
+      {"mission_state", feedback->info.state}, 
+      {"message", feedback->info.message}
+  };
+  
+  // Add the robots array to the main message
+  json_msg["robots"] = std::move(json_msgs);
 
   sendJsonMessage("WaypointMissionFeedback", json_msg);
 }
 
 //}
+//Autonomy test callbacks
+/* AutonomyTestActiveCallback() //{ */
+void IROCBridge::AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
+  ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
 
+  /* ROS_INFO_STREAM("[IROCBridge]: Action client state " << action_client_ptr_->getState().toString()); */
+  for (const auto& robot : robots) {
+    ROS_INFO_STREAM(robot);
+  }
+}
+
+//}
+
+/* AutonomyTestDoneCallback() //{ */
+
+void IROCBridge::AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
+    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
+
+
+  if (result == NULL) {
+    ROS_WARN(
+        "[IROCBridge]: Probably fleet handler died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
+        "restarted need to upload a new mission!");
+
+    // Create JSON with Crow
+    crow::json::wvalue json_msg = {
+      {"mission_result", "Fleet manager died in ongoing mission"},
+      {"mission_success", false}
+    };
+    sendJsonMessage("WaypointMissionDone", json_msg);
+  } else {
+    if (result->success) {
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+    } else {
+      ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+    }
+
+    // Create an array of message objects
+    crow::json::wvalue result_msgs = crow::json::wvalue::list();
+    for (size_t i = 0; i < result->messages.size(); i++) {
+      crow::json::wvalue msg_obj = {
+        {"message", result->messages[i]}
+      };
+      result_msgs[i] = std::move(msg_obj);
+    }
+
+    // Create the main JSON object
+    crow::json::wvalue json_msg = {
+      {"mission_success", result->success}
+    };
+    json_msg["mission_result"] = std::move(result_msgs);
+
+    sendJsonMessage("WaypointMissionDone", json_msg);
+  }
+}
+
+//}
+
+/* AutonomyTestFeedbackCallback() //{ */
+
+void IROCBridge::AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
+    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot) {
+
+  /* ROS_INFO_STREAM("[IROCBridge]: Feedback from " << feedback->info.message << "State: " << feedback->info.state << "Progress: " << feedback->info.progress);
+  */
+
+  /* ROS_INFO_STREAM("[IROCBridge]:Feedback callback: Action client state " << action_client_ptr_->getState().toString()); */
+  auto robots_feedback = feedback->info.robots_feedback;
+  
+  // Create a list for robot feedback
+  crow::json::wvalue json_msgs = crow::json::wvalue::list();
+
+  // Collect each robot feedback and create a json for each
+  for (size_t i = 0; i < robots_feedback.size(); i++) {
+    const auto& rfb = robots_feedback[i];
+    
+    crow::json::wvalue robot_json = {
+        {"robot_name", rfb.name},
+        {"message", rfb.message},
+        {"mission_progress", rfb.mission_progress},
+        {"current_goal", rfb.goal_idx},
+        {"distance_to_goal", rfb.distance_to_closest_goal},
+        {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
+        {"goal_progress", rfb.goal_progress},
+        {"distance_to_finish", rfb.distance_to_finish},
+        {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
+    };
+    
+    // Add to the list at index i
+    json_msgs[i] = std::move(robot_json);
+  }
+
+  // Create the main JSON message
+  crow::json::wvalue json_msg = {
+      {"progress", feedback->info.progress}, 
+      {"mission_state", feedback->info.state}, 
+      {"message", feedback->info.message}
+  };
+  
+  // Add the robots array to the main message
+  json_msg["robots"] = std::move(json_msgs);
+
+  sendJsonMessage("WaypointMissionFeedback", json_msg);
+}
+
+//}
 // --------------------------------------------------------------
 // |                 parsing and output methods                 |
 // --------------------------------------------------------------
@@ -574,19 +720,22 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
 /* parseGeneralRobotInfo() //{ */
 
 void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string& robot_name) {
-  const json json_msg = {
-      {"robot_name", general_robot_info->robot_name},
-      {"robot_type", general_robot_info->robot_type},
-      {"battery_state",
-       {
-           {"voltage", general_robot_info->battery_state.voltage},
-           {"percentage", general_robot_info->battery_state.percentage},
-           {"wh_drained", general_robot_info->battery_state.wh_drained},
-       }},
-      {"ready_to_start", general_robot_info->ready_to_start},
-      {"problems_preventing_start", general_robot_info->problems_preventing_start},
-      {"errors", general_robot_info->errors},
-  };
+ 
+  // Create the battery_state sub-object
+  crow::json::wvalue battery_state;
+  battery_state["voltage"] = general_robot_info->battery_state.voltage;
+  battery_state["percentage"] = general_robot_info->battery_state.percentage;
+  battery_state["wh_drained"] = general_robot_info->battery_state.wh_drained;
+  
+  // Create the main JSON object
+  crow::json::wvalue json_msg;
+  json_msg["robot_name"] = general_robot_info->robot_name;
+  json_msg["robot_type"] = general_robot_info->robot_type;
+  json_msg["battery_state"] = std::move(battery_state);
+  json_msg["ready_to_start"] = general_robot_info->ready_to_start;
+  json_msg["problems_preventing_start"] = general_robot_info->problems_preventing_start;
+  json_msg["errors"] = general_robot_info->errors;
+
   sendJsonMessage("GeneralRobotInfo", json_msg);
 }
 
@@ -595,39 +744,79 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
 /* parseStateEstimationInfo() //{ */
 
 void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimationInfo::ConstPtr state_estimation_info, const std::string& robot_name) {
-  const json json_msg = {
-      {"robot_name", robot_name},
-      {"estimation_frame", state_estimation_info->header.frame_id},
-      {"local_pose",
-       {{"x", state_estimation_info->local_pose.position.x},
-        {"y", state_estimation_info->local_pose.position.y},
-        {"z", state_estimation_info->local_pose.position.z},
-        {"heading", state_estimation_info->local_pose.heading}}},
-      {"global_pose",
-       {{"latitude", state_estimation_info->global_pose.position.x},
-        {"longitude", state_estimation_info->global_pose.position.y},
-        {"altitude", state_estimation_info->global_pose.position.z},
-        {"heading", state_estimation_info->global_pose.heading}}},
-      {"above_ground_level_height", state_estimation_info->above_ground_level_height},
-      {"velocity",
-       {{"linear",
-         {{"x", state_estimation_info->velocity.linear.x}, {"y", state_estimation_info->velocity.linear.y}, {"z", state_estimation_info->velocity.linear.z}}},
-        {"angular",
-         {{"x", state_estimation_info->velocity.angular.x},
-          {"y", state_estimation_info->velocity.angular.y},
-          {"z", state_estimation_info->velocity.angular.z}}}}},
-      {"acceleration",
-       {{"linear",
-         {{"x", state_estimation_info->acceleration.linear.x},
-          {"y", state_estimation_info->acceleration.linear.y},
-          {"z", state_estimation_info->acceleration.linear.z}}},
-        {"angular",
-         {{"x", state_estimation_info->acceleration.angular.x},
-          {"y", state_estimation_info->acceleration.angular.y},
-          {"z", state_estimation_info->acceleration.angular.z}}}}},
-      {"current_estimator", state_estimation_info->current_estimator},
-      {"running_estimators", state_estimation_info->running_estimators},
-      {"switchable_estimators", state_estimation_info->switchable_estimators}};
+
+  // Create the deeply nested JSON structure using Crow
+  crow::json::wvalue json_msg;
+
+  // Basic fields
+  json_msg["robot_name"] = robot_name;
+  json_msg["estimation_frame"] = state_estimation_info->header.frame_id;
+  json_msg["above_ground_level_height"] = state_estimation_info->above_ground_level_height;
+  json_msg["current_estimator"] = state_estimation_info->current_estimator;
+
+  // Local pose object
+  crow::json::wvalue local_pose;
+  local_pose["x"] = state_estimation_info->local_pose.position.x;
+  local_pose["y"] = state_estimation_info->local_pose.position.y;
+  local_pose["z"] = state_estimation_info->local_pose.position.z;
+  local_pose["heading"] = state_estimation_info->local_pose.heading;
+  json_msg["local_pose"] = std::move(local_pose);
+
+  // Global pose object
+  crow::json::wvalue global_pose;
+  global_pose["latitude"] = state_estimation_info->global_pose.position.x;
+  global_pose["longitude"] = state_estimation_info->global_pose.position.y;
+  global_pose["altitude"] = state_estimation_info->global_pose.position.z;
+  global_pose["heading"] = state_estimation_info->global_pose.heading;
+  json_msg["global_pose"] = std::move(global_pose);
+
+  // Velocity object with nested linear and angular
+  crow::json::wvalue velocity;
+
+  crow::json::wvalue velocity_linear;
+  velocity_linear["x"] = state_estimation_info->velocity.linear.x;
+  velocity_linear["y"] = state_estimation_info->velocity.linear.y;
+  velocity_linear["z"] = state_estimation_info->velocity.linear.z;
+
+  crow::json::wvalue velocity_angular;
+  velocity_angular["x"] = state_estimation_info->velocity.angular.x;
+  velocity_angular["y"] = state_estimation_info->velocity.angular.y;
+  velocity_angular["z"] = state_estimation_info->velocity.angular.z;
+
+  velocity["linear"] = std::move(velocity_linear);
+  velocity["angular"] = std::move(velocity_angular);
+  json_msg["velocity"] = std::move(velocity);
+
+  // Acceleration object with nested linear and angular
+  crow::json::wvalue acceleration;
+
+  crow::json::wvalue acceleration_linear;
+  acceleration_linear["x"] = state_estimation_info->acceleration.linear.x;
+  acceleration_linear["y"] = state_estimation_info->acceleration.linear.y;
+  acceleration_linear["z"] = state_estimation_info->acceleration.linear.z;
+
+  crow::json::wvalue acceleration_angular;
+  acceleration_angular["x"] = state_estimation_info->acceleration.angular.x;
+  acceleration_angular["y"] = state_estimation_info->acceleration.angular.y;
+  acceleration_angular["z"] = state_estimation_info->acceleration.angular.z;
+
+  acceleration["linear"] = std::move(acceleration_linear);
+  acceleration["angular"] = std::move(acceleration_angular);
+  json_msg["acceleration"] = std::move(acceleration);
+
+  // Handle arrays
+  crow::json::wvalue running_estimators = crow::json::wvalue::list();
+  for (size_t i = 0; i < state_estimation_info->running_estimators.size(); i++) {
+    running_estimators[i] = state_estimation_info->running_estimators[i];
+  }
+  json_msg["running_estimators"] = std::move(running_estimators);
+
+  crow::json::wvalue switchable_estimators = crow::json::wvalue::list();
+  for (size_t i = 0; i < state_estimation_info->switchable_estimators.size(); i++) {
+    switchable_estimators[i] = state_estimation_info->switchable_estimators[i];
+  }
+  json_msg["switchable_estimators"] = std::move(switchable_estimators);
+
   sendJsonMessage("StateEstimationInfo", json_msg);
 }
 
@@ -636,14 +825,15 @@ void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimation
 /* parseControlInfo() //{ */
 
 void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info, const std::string& robot_name) {
-  const json json_msg = {
-      {"robot_name", robot_name},
-      {"active_controller", control_info->active_controller},
-      {"available_controllers", control_info->available_controllers},
-      {"active_tracker", control_info->active_tracker},
-      {"available_trackers", control_info->available_trackers},
-      {"thrust", control_info->thrust},
-  };
+  
+  crow::json::wvalue json_msg;
+  json_msg["robot_name"] = robot_name;
+  json_msg["active_controller"] = control_info->active_controller;
+  json_msg["available_controllers"] = control_info->available_controllers;
+  json_msg["active_tracker"] = control_info->active_tracker;
+  json_msg["available_trackers"] = control_info->available_trackers;
+  json_msg["thrust"] = control_info->thrust;
+
   sendJsonMessage("ControlInfo", json_msg);
 }
 
@@ -652,12 +842,13 @@ void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr c
 /* parseCollisionAvoidanceInfo() //{ */
 
 void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info, const std::string& robot_name) {
-  const json json_msg = {
-      {"robot_name", robot_name},
-      {"collision_avoidance_enabled", collision_avoidance_info->collision_avoidance_enabled},
-      {"avoiding_collision", collision_avoidance_info->avoiding_collision},
-      {"other_robots_visible", collision_avoidance_info->other_robots_visible},
-  };
+  
+  crow::json::wvalue json_msg;
+  json_msg["robot_name"] = robot_name;
+  json_msg["collision_avoidance_enabled"] = collision_avoidance_info->collision_avoidance_enabled;
+  json_msg["avoiding_collision"] = collision_avoidance_info->avoiding_collision;
+  json_msg["other_robots_visible"] = collision_avoidance_info->other_robots_visible;
+
   sendJsonMessage("CollisionAvoidanceInfo", json_msg);
 }
 
@@ -666,15 +857,15 @@ void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvo
 /* parseUavInfo() //{ */
 
 void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string& robot_name) {
-  const json json_msg = {
-      {"robot_name", robot_name},
-      {"armed", uav_info->armed},
-      {"offboard", uav_info->offboard},
-      {"flight_state", uav_info->flight_state},
-      {"flight_duration", uav_info->flight_duration},
-      {"mass_nominal", uav_info->mass_nominal},
-      {"mass_estimate", uav_info->mass_estimate},
-  };
+  
+  crow ::json::wvalue json_msg;
+  json_msg["robot_name"] = robot_name;
+  json_msg["armed"] = uav_info->armed;
+  json_msg["offboard"] = uav_info->offboard;
+  json_msg["flight_state"] = uav_info->flight_state;
+  json_msg["flight_duration"] = uav_info->flight_duration;
+  json_msg["mass_nominal"] = uav_info->mass_nominal;
+
   sendJsonMessage("UavInfo", json_msg);
 }
 
@@ -683,34 +874,51 @@ void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info,
 /* parseSystemHealthInfo() //{ */
 
 void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr system_health_info, const std::string& robot_name) {
-  json node_cpu_loads;
-  for (const auto& node_cpu_load : system_health_info->node_cpu_loads)
-    node_cpu_loads.emplace_back(json::array({node_cpu_load.node_name, node_cpu_load.cpu_load}));
 
-  json required_sensors;
-  for (const auto& required_sensor : system_health_info->required_sensors)
-    required_sensors.emplace_back(json{
-        {"name", required_sensor.name},
-        {"status", required_sensor.status},
-        {"ready", required_sensor.ready},
-        {"rate", required_sensor.rate},
-    });
+  // Create arrays for node_cpu_loads
+  crow::json::wvalue node_cpu_loads = crow::json::wvalue::list();
+  for (size_t i = 0; i < system_health_info->node_cpu_loads.size(); i++) {
+    const auto& node_cpu_load = system_health_info->node_cpu_loads[i];
 
-  const json json_msg = {
-      {"robot_name", robot_name},
-      {"cpu_load", system_health_info->cpu_load},
-      {"free_ram", system_health_info->free_ram},
-      {"total_ram", system_health_info->total_ram},
-      {"free_hdd", system_health_info->free_hdd},
-      {"node_cpu_loads", node_cpu_loads},
-      {"hw_api_rate", system_health_info->hw_api_rate},
-      {"control_manager_rate", system_health_info->control_manager_rate},
-      {"state_estimation_rate", system_health_info->state_estimation_rate},
-      {"gnss_uncertainty", system_health_info->gnss_uncertainty},
-      {"mag_strength", system_health_info->mag_strength},
-      {"mag_uncertainty", system_health_info->mag_uncertainty},
-      {"required_sensors", required_sensors},
-  };
+    // Create a nested array for each node_cpu_load
+    crow::json::wvalue node_entry = crow::json::wvalue::list();
+    node_entry[0] = node_cpu_load.node_name;
+    node_entry[1] = node_cpu_load.cpu_load;
+
+    node_cpu_loads[i] = std::move(node_entry);
+  }
+
+  // Create array for required_sensors
+  crow::json::wvalue required_sensors = crow::json::wvalue::list();
+  for (size_t i = 0; i < system_health_info->required_sensors.size(); i++) {
+    const auto& required_sensor = system_health_info->required_sensors[i];
+
+    // Create an object for each required_sensor
+    crow::json::wvalue sensor_entry;
+    sensor_entry["name"] = required_sensor.name;
+    sensor_entry["status"] = required_sensor.status;
+    sensor_entry["ready"] = required_sensor.ready;
+    sensor_entry["rate"] = required_sensor.rate;
+
+    required_sensors[i] = std::move(sensor_entry);
+  }
+
+  // Create the main JSON object
+  crow::json::wvalue json_msg;
+  json_msg["robot_name"] = robot_name;
+  json_msg["cpu_load"] = system_health_info->cpu_load;
+  json_msg["free_ram"] = system_health_info->free_ram;
+  json_msg["total_ram"] = system_health_info->total_ram;
+  json_msg["free_hdd"] = system_health_info->free_hdd;
+  json_msg["node_cpu_loads"] = std::move(node_cpu_loads);
+  json_msg["hw_api_rate"] = system_health_info->hw_api_rate;
+  json_msg["control_manager_rate"] = system_health_info->control_manager_rate;
+  json_msg["state_estimation_rate"] = system_health_info->state_estimation_rate;
+  json_msg["gnss_uncertainty"] = system_health_info->gnss_uncertainty;
+  json_msg["mag_strength"] = system_health_info->mag_strength;
+  json_msg["mag_uncertainty"] = system_health_info->mag_uncertainty;
+  json_msg["required_sensors"] = std::move(required_sensors);
+
   sendJsonMessage("SystemHealthInfo", json_msg);
 }
 
@@ -722,7 +930,7 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 
 /* sendJsonMessage() //{ */
 
-void IROCBridge::sendJsonMessage(const std::string& msg_type, const json& json_msg) {
+void IROCBridge::sendJsonMessage(const std::string& msg_type,crow::json::wvalue& json_msg) {
   const std::string url          = "/api/robot/telemetry/" + msg_type;
   const std::string body         = json_msg.dump();
   const std::string content_type = "application/json";
@@ -1069,22 +1277,22 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
     return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad json input: " + req.body + "\"}");
   }
 
-  std::string units;
-  int         origin_x;
-  int         origin_y;
-  int         min_z;
-  int         max_z;
-
   bool enabled = true;  // Defined default as true
+                        
+  // Get message properties
+  int height_id                          = json_msg["height_id"].i();
+  int max_z                              = json_msg["max_z"].i();
+  int min_z                              = json_msg["min_z"].i();
+  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
 
   std::string horizontal_frame = "latlon_origin";
   std::string vertical_frame;
 
-  int                        height_id;
   std::map<int, std::string> height_id_map = {
       {0, "world_origin"},
       {1, "latlon_origin"},
   };
+
   auto it = height_id_map.find(height_id);
   if (it != height_id_map.end())
     vertical_frame = it->second;
@@ -1092,9 +1300,6 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
     ROS_ERROR_STREAM("[IROCBridge]: Unknown height_id: " << height_id);
     return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Unknown height_id field\"}");
   }
-
-  // Parse points
-  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
 
   std::vector<mrs_msgs::Point2D> border_points;
   border_points.reserve(points.size());
@@ -1152,9 +1357,10 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
     return crow::response(crow::status::BAD_REQUEST, "Failed to parse JSON or missing 'points' key: " + req.body);
 
   // Get message properties
-  int height_id = json_msg["height_id"].i();
-  int max_z     = json_msg["max_z"].i();
-  int min_z     = json_msg["min_z"].i();
+  int height_id                          = json_msg["height_id"].i();
+  int max_z                              = json_msg["max_z"].i();
+  int min_z                              = json_msg["min_z"].i();
+  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
 
   std::string horizontal_frame = "latlon_origin";
   std::string vertical_frame;
@@ -1169,11 +1375,10 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
   else
     return crow::response(crow::status::BAD_REQUEST, "Unknown height_id field: " + req.body);
 
-  // Parse points
-  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
   if (points.empty())
     return crow::response(crow::status::BAD_REQUEST, "Empty points array: " + req.body);
 
+  //Process points
   std::vector<mrs_msgs::Point2D> border_points;
   border_points.reserve(points.size());
 
@@ -1216,7 +1421,6 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
 //}
 
 /* waypointMissionCallback() method //{ */
-
 /**
  * \brief Callback for the waypoint mission request. It receives a list of missions for each robot and sends them to the fleet manager.
  *
@@ -1226,6 +1430,7 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
 crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
 {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a waypointMissionCallback message JSON -> ROS.");
+  latest_mission_type_ = "waypoint";
 
   try {
     crow::json::rvalue json_msg = crow::json::load(req.body);
@@ -1345,7 +1550,103 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
 }
 //}
 
+/* autonomyTestCallback() method //{ */
+/**
+ * \brief Callback for the autonomy test request. It receives the request for a specific robot the and sends them to the fleet manager autonomy test component.
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::autonomyTestCallback(const crow::request& req)
+{
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a autonomyTestCallback message JSON -> ROS.");
+  latest_mission_type_ = "autonomy_test";
 
+  crow::json::rvalue json_msg = crow::json::load(req.body);
+  if (!json_msg || !json_msg.has("robot_name"))
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'robot_name' key\"}");
+
+  // Get message properties
+  std::string  robot_name = json_msg["robot_name"].s();
+  int segment_length      = json_msg["segment_length"].i();
+  int height_id           = json_msg["height_id"].i();
+  int height              = json_msg["height"].i();
+
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
+
+  if (!rh_ptr) {
+    ROS_ERROR_STREAM("[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Robot \"" + robot_name + "\" not found, ignoring\"}");
+  }
+
+  auto robot_type = rh_ptr->sh_general_robot_info.getMsg()->robot_type;
+
+  switch (robot_type) {
+    case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
+      ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
+      bool use_heading = false;
+      break;
+    };
+
+    case static_cast<uint8_t>(robot_type_t::BOAT): {
+      ROS_INFO("[IROCBridge]: BOAT TYPE: ");
+      bool use_heading = false;
+      break;
+    };
+
+    default:
+      break;
+  }
+
+  //We are using an array of robots as input, as we are using the waypoint mission structure that expects an array of robots.
+  //Kept for simplicity to avoid changing the previous structure that supports multiple robots.
+  //As we decide that autonomy test will be for one drone at a time, we are only adding the specified robot for the autonomy test.
+  std::vector<iroc_fleet_manager::AutonomyTestRobot> mission_robots;
+  iroc_fleet_manager::AutonomyTestRobot mission_robot;
+  mission_robot.name           = robot_name;
+  mission_robot.segment_length = segment_length;
+  mission_robots.push_back(mission_robot);
+
+  AutonomyTestActionServerGoal action_goal;
+  action_goal.robots = mission_robots;
+
+  if (!autonomy_test_client_ptr_->isServerConnected()) {
+    std::string msg = "Action server is not connected. Check iroc_fleet_manager node.\n";
+    ROS_WARN_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
+    return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
+  }
+
+  if (!autonomy_test_client_ptr_->getState().isDone()) {
+    ROS_WARN_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
+    std::string msg = "Mission is already running. Terminate the previous one, or wait until it is finished";
+    return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
+  }
+
+  autonomy_test_client_ptr_->sendGoal(action_goal,
+      std::bind(&IROCBridge::AutonomyTestDoneCallback, this, std::placeholders::_1, std::placeholders::_2, mission_robots),
+      std::bind(&IROCBridge::AutonomyTestActiveCallback, this, mission_robots),
+      std::bind(&IROCBridge::AutonomyTestFeedbackCallback, this, std::placeholders::_1, mission_robots));
+
+  ros::Duration(mission_robots.size() * 1.0).sleep();
+
+  if (autonomy_test_client_ptr_->getState().isDone()) {  // If the action is done, the action finished instantly
+    std::stringstream ss;
+    auto result = autonomy_test_client_ptr_->getResult();
+    for (const auto& message : result->messages)
+      ss << message << ",";
+    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
+    return crow::response(crow::status::SERVICE_UNAVAILABLE, "{\"message\": \"" + ss.str() + "\"}");
+  }
+  else {
+    ROS_INFO("[IROCBridge]: Mission received successfully");
+    return crow::response(crow::status::CREATED, "{\"message\": \"Mission received successfully\"}");
+  }
+}
+//}
+
+/* changeFleetMissionStateCallback() method //{ */
 /**
  * \brief Callback that changes the mission state of the fleet, either starting, stopping, or pausing it.
  *
@@ -1395,19 +1696,39 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
   ros_srv.request.robot_name = robot_name;
   ros_srv.request.type       = type;
 
-  const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
+  if (latest_mission_type_ == "waypoint") {
+    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
 
-  if (!resp.success) {
-    json_msg["message"] = "Call was not successful with message: " + resp.message;
-    ROS_ERROR_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+    if (!resp.success) {
+      json_msg["message"] = "Call was not successful with message: " + resp.message;
+      ROS_ERROR_STREAM("[IROCBridge]: " << json_msg["message"].dump());
 
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
+    }
+    else {
+      json_msg["message"] = "Call successful";
+      return crow::response(crow::status::ACCEPTED, json_msg.dump());
+    }  
   }
-  else {
-    json_msg["message"] = "Call successful";
-    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+
+  if (latest_mission_type_ == "autonomy_test") {
+    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_autonomy_test_state, ros_srv.request);
+
+    if (!resp.success) {
+      json_msg["message"] = "Call was not successful with message: " + resp.message;
+      ROS_ERROR_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
+    }
+    else {
+      json_msg["message"] = "Call successful";
+      return crow::response(crow::status::ACCEPTED, json_msg.dump());
+    }  
   }
+
+  return crow::response(crow::status::NOT_FOUND);
 }
+//}
 
 /* hoverCallback() method //{ */
 

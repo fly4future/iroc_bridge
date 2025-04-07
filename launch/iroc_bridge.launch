@@ -59,16 +59,18 @@
       <remap from="~svc/land" to="/uav_manager/land" />
       <remap from="~svc/hover" to="/control_manager/hover" />
       <remap from="~svc/land_home" to="/uav_manager/land_home" />
-      <remap from="~svc/mission_activation" to="/mission_manager/mission_activation" />
-      <remap from="~svc/mission_pausing" to="/mission_manager/mission_pausing" />
+      <remap from="~svc/mission_activation" to="/mission_handler/mission_activation" />
+      <remap from="~svc/mission_pausing" to="/mission_handler/mission_pausing" />
       <remap from="~svc/set_safety_area" to="/safety_area_manager/set_safety_border" />
       <remap from="~svc/set_obstacle" to="/safety_area_manager/set_obstacle" />
       <remap from="~svc/velocity_reference" to="/control_manager/velocity_reference" />
 
       <!-- Services -->
       <remap from="~ac/waypoint_mission" to="iroc_fleet_manager" />
+      <remap from="~ac/autonomy_test" to="iroc_autonomy_test" />
       <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
       <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />
+      <remap from="~svc/change_autonomy_test_state" to="iroc_autonomy_test/change_robot_mission_state" />
     </node>
 
   </group>
