@@ -345,7 +345,8 @@ void IROCBridge::onInit() {
       })
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-  th_http_srv_ = std::thread([&]() { http_srv_.port(server_port).multithreaded().run(); });
+
+  th_http_srv_ = std::thread([&]() { http_srv_.loglevel(crow::LogLevel::ERROR).port(server_port).multithreaded().run(); });
   th_http_srv_.detach();
 
   // | ----------------------- subscribers ---------------------- |
@@ -789,7 +790,7 @@ void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimation
       state_estimation_info->switchable_estimators.end())
     }}
   };
-  
+
   sendJsonMessage("StateEstimationInfo", json_msg);
 }
 
