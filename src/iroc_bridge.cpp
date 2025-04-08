@@ -158,6 +158,12 @@ private:
   void AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
                                    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot);
 
+  void AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
+  void AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
+                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot);
+
   // | ------------------ Additional functions ------------------ |
 
   void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string& robot_name);
@@ -219,7 +225,6 @@ private:
 
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
   std::unique_ptr<AutonomyTestClient>         autonomy_test_client_ptr_;
-
 };
 //}
 
@@ -409,10 +414,10 @@ void IROCBridge::onInit() {
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_set_safety_area.getService().c_str());
 
       robot_handler.sc_set_obstacle = nh_.serviceClient<mrs_msgs::SetObstacleSrv>("/" + robot_name + nh_.resolveName("svc/set_obstacle"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_obstacle\' -> \'%s\'", robot_handler.sc_set_obstacle.getService().c_str());
 
       robot_handler.sc_velocity_reference = nh_.serviceClient<mrs_msgs::VelocityReferenceStampedSrv>("/" + robot_name + nh_.resolveName("svc/velocity_reference"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/velocity_reference\' -> \'%s\'", robot_handler.sc_velocity_reference.getService().c_str());
@@ -439,7 +444,7 @@ void IROCBridge::onInit() {
            sc_change_autonomy_test_state.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
-  //Fleet Manager
+
   //Waypoint Mission
   const std::string waypoint_action_client_topic = nh_.resolveName("ac/waypoint_mission");
   action_client_ptr_                             = std::make_unique<WaypointFleetManagerClient>(waypoint_action_client_topic, false);
@@ -449,6 +454,7 @@ void IROCBridge::onInit() {
   const std::string autonomy_test_client_topic = nh_.resolveName("ac/autonomy_test");
   autonomy_test_client_ptr_                    = std::make_unique<AutonomyTestClient>(autonomy_test_client_topic, false);
   ROS_INFO("[IROCBridge]: Created action client on topic \'ac/autonomy_test\' -> \'%s\'", autonomy_test_client_topic.c_str());
+  
   // | ------------------------- timers ------------------------- |
 
   timer_main_     = nh_.createTimer(ros::Rate(main_timer_rate), &IROCBridge::timerMain, this);
@@ -468,7 +474,6 @@ void IROCBridge::onInit() {
 // --------------------------------------------------------------
 
 /* timerMain() //{ */
-
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
@@ -501,8 +506,8 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 // |                  action client callbacks                   |
 // --------------------------------------------------------------
 
+//TODO: Improve the mission callbacks to use template functions
 /* waypointMissionActiveCallback //{ */
-
 void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
 
   ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
@@ -516,13 +521,12 @@ void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_mana
 //}
 
 /* waypointMissionDoneCallback //{ */
-
 void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result,
                                              const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
 
   if (result == NULL) {
     ROS_WARN(
-        "[IROCBridge]: Probably fleet handler died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
+        "[IROCBridge]: Probably fleet_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
         "restarted need to upload a new mission!");
     
     // Create JSON with Crow
@@ -533,9 +537,9 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
     if (result->success) {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     } else {
-      ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
+      ROS_WARN_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     }
 
     // Create the main JSON object
@@ -553,7 +557,6 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
 //}
 
 /* waypointMissionFeedbackCallback //{ */
-
 void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& feedback,
                                                  const std::vector<iroc_fleet_manager::WaypointMissionRobot>&    robots) {
 
@@ -612,7 +615,6 @@ void IROCBridge::AutonomyTestActiveCallback(const std::vector<iroc_fleet_manager
 //}
 
 /* AutonomyTestDoneCallback() //{ */
-
 void IROCBridge::AutonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
     const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
 
@@ -650,7 +652,6 @@ void IROCBridge::AutonomyTestDoneCallback(const SimpleClientGoalState& state, co
 //}
 
 /* AutonomyTestFeedbackCallback() //{ */
-
 void IROCBridge::AutonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
     const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot) {
 
@@ -695,8 +696,8 @@ void IROCBridge::AutonomyTestFeedbackCallback(const iroc_fleet_manager::Autonomy
 
   sendJsonMessage("WaypointMissionFeedback", json_msg);
 }
-
 //}
+  
 // --------------------------------------------------------------
 // |                 parsing and output methods                 |
 // --------------------------------------------------------------
@@ -937,7 +938,7 @@ IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc, typename Sv
       ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
       return {true, res.message};
     } else {
-      ROS_ERROR_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      ROS_WARN_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
       return {false, res.message};
     }
   } else {
@@ -1010,7 +1011,7 @@ IROCBridge::result_t IROCBridge::takeoffAction(const std::vector<std::string>& r
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1039,7 +1040,7 @@ IROCBridge::result_t IROCBridge::hoverAction(const std::vector<std::string>& rob
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1068,7 +1069,7 @@ IROCBridge::result_t IROCBridge::landAction(const std::vector<std::string>& robo
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1097,7 +1098,7 @@ IROCBridge::result_t IROCBridge::landHomeAction(const std::vector<std::string>& 
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1129,7 +1130,7 @@ IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::st
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1159,7 +1160,7 @@ IROCBridge::result_t IROCBridge::setObstacleAction(const std::vector<std::string
       }
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_ERROR_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
     }
   }
@@ -1226,7 +1227,7 @@ crow::response IROCBridge::pathCallback(const crow::request& req)
       ref.heading = el["heading"].d();
       msg_path.use_heading = true;
     }
-
+    
     msg_path.points.push_back(ref);
   }
 
@@ -1274,6 +1275,19 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
       {1, "latlon_origin"},
   };
 
+  const auto succ = parse_vars(json_msg, {{"height_id", &height_id}, {"points", &points}, {"max_z", &max_z}, {"min_z", &min_z}});
+
+  if (!succ)
+    return;
+
+  if (!points.is_array()) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Bad points input: Expected an array.");
+    res.status = httplib::StatusCode::BadRequest_400;
+    ss << "Bad points input: Expected an array ";
+    json json_response_msg = {{"message", ss.str()}};
+    res.set_content(json_response_msg.dump(), "application/json");
+    return;
+  }
   auto it = height_id_map.find(height_id);
   if (it != height_id_map.end())
     vertical_frame = it->second;
@@ -1333,6 +1347,7 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
     return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Another safety border callback is already active.\"}");
 
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
+
   crow::json::rvalue json_msg = crow::json::load(req.body);
   if (!json_msg)
     return crow::response(crow::status::BAD_REQUEST, "Failed to parse JSON or missing 'points' key: " + req.body);
@@ -1350,9 +1365,11 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
       {0, "world_origin"},
       {1, "latlon_origin"},
   };
+
   auto it = height_id_map.find(height_id);
   if (it != height_id_map.end())  // check if the height_id is valid (exists in the map)
     vertical_frame = it->second;
+
   else
     return crow::response(crow::status::BAD_REQUEST, "Unknown height_id field: " + req.body);
 
@@ -1459,7 +1476,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
 
       // Process the points in the mission
       std::vector<crow::json::rvalue> points = mission_json["points"].lo();
-
+      
       std::vector<mrs_msgs::Reference> ref_points;
       ref_points.reserve(points.size());
       for (const auto& point : points) {
@@ -1487,13 +1504,11 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
     if (!action_client_ptr_->isServerConnected()) {
       ROS_ERROR_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
       std::string msg = "Action server is not connected. Check iroc_fleet_manager node.\n";
-
       return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
     }
     else if (!action_client_ptr_->getState().isDone()) {
       ROS_ERROR_STREAM("[IROCBridge]: Mission is already running. Terminate the previous one, or wait until it is finished.");
       std::string msg = "Mission is already running. Terminate the previous one, or wait until it is finished";
-
       return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
     }
 
@@ -1679,7 +1694,6 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
 
   if (latest_mission_type_ == "waypoint") {
     const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
-
     if (!resp.success) {
       json_msg["message"] = "Call was not successful with message: " + resp.message;
       ROS_ERROR_STREAM("[IROCBridge]: " << json_msg["message"].dump());
@@ -1712,7 +1726,6 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
 //}
 
 /* hoverCallback() method //{ */
-
 /**
  * \brief Callback that sends a `hover` command to the robots specified in the request body.
  * \param req Crow request
@@ -1738,7 +1751,6 @@ crow::response IROCBridge::hoverCallback(const crow::request& req)
 //}
 
 /* hoverAllCallback() method //{ */
-
 /**
  * \brief Callback that sends a `hover` command to all robots in the fleet.
  *
@@ -1748,6 +1760,7 @@ crow::response IROCBridge::hoverCallback(const crow::request& req)
 crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request& req)
 {
   std::scoped_lock lck(robot_handlers_.mtx);
+
 
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
@@ -1760,7 +1773,6 @@ crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request
 //}
 
 /* takeoffCallback() method //{ */
-
 /**
  * \brief Callback that sends a `takeoff` command to the robots specified in the request body.
  *
