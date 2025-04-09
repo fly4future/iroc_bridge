@@ -876,7 +876,7 @@ void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
   const auto        res          = http_client_->Post(url, body, content_type);
 
   if (res)
-    ROS_INFO_STREAM_THROTTLE(1.0, res->status << ": " << res->body);
+    ROS_DEBUG_STREAM_THROTTLE(1.0, res->status << ": " << res->body);
   else
     ROS_WARN_STREAM_THROTTLE(1.0, "Failed to send PATCH request to address \"" << url << "\": " << to_string(res.error()));
 
@@ -1709,7 +1709,6 @@ crow::response IROCBridge::hoverCallback(const crow::request& req)
 crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request& req)
 {
   std::scoped_lock lck(robot_handlers_.mtx);
-
 
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
