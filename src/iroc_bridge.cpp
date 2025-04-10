@@ -829,17 +829,17 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
     node_cpu_loads[i] = std::move(node_entry);
   }
 
-  // Create array for required_sensors
-  json required_sensors = json::list();
-  for (size_t i = 0; i < system_health_info->required_sensors.size(); i++) {
-    const auto& required_sensor = system_health_info->required_sensors[i];
+  // Create array for available_sensors
+  json available_sensors = json::list();
+  for (size_t i = 0; i < system_health_info->available_sensors.size(); i++) {
+    const auto& available_sensor = system_health_info->available_sensors[i];
 
     // Create an object for each required_sensor using initializer list
-    required_sensors[i] = {
-      {"name", required_sensor.name},
-      {"status", required_sensor.status},
-      {"ready", required_sensor.ready},
-      {"rate", required_sensor.rate}
+    available_sensors[i] = {
+      {"name", available_sensor.name},
+      {"status", available_sensor.status},
+      {"ready", available_sensor.ready},
+      {"rate", available_sensor.rate}
     };
   }
 
@@ -857,7 +857,7 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
     {"mag_strength", system_health_info->mag_strength},
     {"mag_uncertainty", system_health_info->mag_uncertainty},
     {"node_cpu_loads", node_cpu_loads},
-    {"required_sensors", required_sensors}
+    {"available_sensors", available_sensors}
   };
 
   sendJsonMessage("SystemHealthInfo", json_msg);
