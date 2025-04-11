@@ -1511,8 +1511,6 @@ crow::response IROCBridge::autonomyTestCallback(const crow::request& req)
   // Get message properties
   std::string  robot_name = json_msg["robot_name"].s();
   int segment_length      = json_msg["segment_length"].i();
-  int height_id           = json_msg["height_id"].i();
-  int height              = json_msg["height"].i();
 
   std::scoped_lock lck(robot_handlers_.mtx);
 
