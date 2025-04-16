@@ -508,34 +508,44 @@ void IROCBridge::waypointMissionActiveCallback(const std::vector<iroc_fleet_mana
 
 /* waypointMissionDoneCallback //{ */
 void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result,
-                                             const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
+    const std::vector<iroc_fleet_manager::WaypointMissionRobot>& robots) {
   if (result == NULL) {
     ROS_WARN(
         "[IROCBridge]: Probably fleet_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
         "restarted need to upload a new mission!");
-    
+
     // Create JSON with Crow
     json json_msg = {
-        {"mission_result", "Fleet manager died in ongoing mission"},
-        {"mission_success", false}
+      {"mission_results", "Fleet manager died in ongoing mission"},
+      {"mission_success", false}
     };
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
     if (result->success) {
       ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     } else {
-      ROS_WARN_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
+      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
+    }
+
+    json robots_results = json::list(); 
+
+    for (size_t i = 0; i < result->robots_results.size(); i++) {
+      ROS_INFO("[IROCBridge]: Robot: %s", result->robots_results[i].name.c_str());
+      ROS_INFO("[IROCBridge]: Success: %d", result->robots_results[i].success);
+      ROS_INFO("[IROCBridge]: Message: %s", result->robots_results[i].message.c_str());
+      robots_results[i] = {
+        {"robot_name", result->robots_results[i].name},
+        {"success", result->robots_results[i].success}, 
+        {"message", result->robots_results[i].message} 
+      };
     }
 
     // Create the main JSON object
     json json_msg = {
-        {"mission_success", result->success},
-        {"mission_result", json::list(
-            result->messages.begin(),
-            result->messages.end())
-        }
+      {"mission_success", result->success},
+      {"robot_results", robots_results} 
     };
-    
+
     sendJsonMessage("WaypointMissionDone", json_msg);
   }
 }
