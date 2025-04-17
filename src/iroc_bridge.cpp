@@ -256,8 +256,9 @@ void IROCBridge::onInit() {
     param_loader.addYamlFile(network_config_path);
   }
 
-  const auto main_timer_rate    = param_loader.loadParam2<double>("main_timer_rate");
-  const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("no_message_timeout");
+  const auto main_timer_rate       = param_loader.loadParam2<double>("main_timer_rate");
+  const auto _http_server_threads_ = param_loader.loadParam2<double>("http_server_threads");
+  const auto no_message_timeout    = param_loader.loadParam2<ros::Duration>("no_message_timeout");
 
   const auto url         = param_loader.loadParam2<std::string>("url");
   const auto client_port = param_loader.loadParam2<int>("client_port");
@@ -340,8 +341,8 @@ void IROCBridge::onInit() {
       })
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-
-  th_http_srv_ = std::thread([&]() { http_srv_.loglevel(crow::LogLevel::ERROR).port(server_port).multithreaded().run(); });
+  th_http_srv_ = std::thread([&]() { http_srv_.loglevel(crow::LogLevel::ERROR).port(server_port).concurrency(_http_server_threads_).run(); });
+  ROS_INFO("[IROCBridge]: Threads using %d ", http_srv_.concurrency());
   th_http_srv_.detach();
 
   // | ----------------------- subscribers ---------------------- |
