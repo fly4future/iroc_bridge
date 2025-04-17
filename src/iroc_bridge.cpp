@@ -614,8 +614,8 @@ void IROCBridge::autonomyTestDoneCallback(
 
     // Create JSON with Crow
     json json_msg = {
-      {"mission_result", "Fleet manager died in ongoing mission"},
-      {"mission_success", false}
+      {"result", "Fleet manager died in ongoing mission"},
+      {"success", false}
     };
     sendJsonMessage("WaypointMissionDone", json_msg);
   } else {
@@ -625,16 +625,24 @@ void IROCBridge::autonomyTestDoneCallback(
       ROS_ERROR_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
     }
 
+    json robots_results = json::list(); 
+
+    for (size_t i = 0; i < result->robots_results.size(); i++) {
+      robots_results[i] = {
+        {"robot_name", result->robots_results[i].name},
+        {"success", result->robots_results[i].success}, 
+        {"message", result->robots_results[i].message} 
+      };
+    }
+
     // Create the main JSON object
     json json_msg = {
-      {"mission_success", result->success},
-      {"mission_result", json::list(
-          result->messages.begin(), 
-          result->messages.end())
-      }
+      {"success", result->success},
+      {"message", result->message},
+      {"robot_results", robots_results} 
     };
 
-    sendJsonMessage("WaypointMissionDone", json_msg);
+    sendJsonMessage("AutonomyTestDone", json_msg);
   }
 }
 //}
@@ -677,7 +685,7 @@ void IROCBridge::autonomyTestFeedbackCallback(const iroc_fleet_manager::Autonomy
   // Add the robots array to the main message
   json_msg["robots"] = std::move(json_msgs);
 
-  sendJsonMessage("WaypointMissionFeedback", json_msg);
+  sendJsonMessage("AutonomyTestFeedback", json_msg);
 }
 //}
   
@@ -1579,12 +1587,10 @@ crow::response IROCBridge::autonomyTestCallback(const crow::request& req)
   ros::Duration(mission_robots.size() * 1.0).sleep();
 
   if (autonomy_test_client_ptr_->getState().isDone()) {  // If the action is done, the action finished instantly
-    std::stringstream ss;
     auto result = autonomy_test_client_ptr_->getResult();
-    for (const auto& message : result->messages)
-      ss << message << ",";
-    ROS_ERROR("[IROCBridge]: %s", ss.str().c_str());
-    return crow::response(crow::status::SERVICE_UNAVAILABLE, "{\"message\": \"" + ss.str() + "\"}");
+    const auto message = result->message;
+    ROS_ERROR("[IROCBridge]: %s", message.c_str());
+    return crow::response(crow::status::SERVICE_UNAVAILABLE, "{\"message\": \"" + message + "\"}");
   }
   else {
     ROS_INFO("[IROCBridge]: Mission received successfully");
