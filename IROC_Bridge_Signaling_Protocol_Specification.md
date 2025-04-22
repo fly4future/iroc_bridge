@@ -9,11 +9,17 @@ The requests and responses are in JSON format.
 
 ### Requests
 #### Status
-* <span style="color:green"> `GET` </span> **Avalaible Robots** \
+* <span style="color:green"> 
+ `GET` 
+ </span> 
+ **Avalaible Robots** \
 `http://localhost:8080/available_robots`
 
 #### Actions
-* <span style="color:orange"> `POST` </span> **Takeoff** \
+* <span style="color:orange"> 
+ `POST` 
+ </span> 
+ **Takeoff** \
 `http://localhost:8080/takeoff`
 <details>
   <summary>
@@ -29,10 +35,14 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-* <span style="color:green"> `GET` </span> **Takeoff All** \
+* <span style="color:green"> 
+ `GET` </span> 
+ **Takeoff All** \
 `http://localhost:8080/takeoff_all`
 
-* <span style="color:orange"> `POST` </span> **Hover** \
+* <span style="color:orange"> 
+ `POST` </span> 
+ **Hover** \
 `http://localhost:8080/hover`
 <details>
   <summary>
@@ -48,10 +58,15 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-* <span style="color:green"> `GET` </span> **Hover All** \
+* <span style="color:green"> 
+ `GET` </span> 
+ **Hover All** \
 `http://localhost:8080/hover_all`
 
-* <span style="color:orange"> `POST` </span> **Land** \
+* <span style="color:orange"> 
+ `POST` 
+ </span> 
+ **Land** \
 `http://localhost:8080/land`
 <details>
   <summary>
@@ -70,7 +85,10 @@ The requests and responses are in JSON format.
 * <span style="color:green"> `GET` </span> **Land All** \
 `http://localhost:8080/land_all`
 
-* <span style="color:orange"> `POST` </span> **Land Home** \
+* <span style="color:orange"> 
+ `POST` 
+ </span> 
+ **Land Home** \
 `http://localhost:8080/land_home`
 <details>
   <summary>
@@ -86,12 +104,16 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-* <span style="color:green"> `GET` </span> **Land Home All** \
+* <span style="color:green"> 
+  `GET` </span> 
+  **Land Home All** \
 `http://localhost:8080/land_home_all`
 
 #### Safety area configuration
 
-* <span style="color:orange"> `POST` </span> **Set Safety Border ** \
+* <span style="color:orange"> 
+  `POST` </span> 
+  **Set Safety Border** \
 `http://localhost:8080/set_safety_border`
 <details>
   <summary>
@@ -125,7 +147,10 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-* <span style="color:orange"> `POST` </span> **Set Obstacle** \
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Set Obstacle** \
 `http://localhost:8080/set_obstacle`
 <details>
   <summary>
@@ -161,7 +186,10 @@ The requests and responses are in JSON format.
 
 #### Mission commands
 
-* <span style="color:orange"> `POST` </span> **Set Waypoint Mission ** \
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Set Waypoint Mission** \
 `http://localhost:8080/set_waypoint_mission`
 <details>
   <summary>
@@ -209,7 +237,10 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-* <span style="color:orange"> `POST` </span> **Set Autonomy Test  ** \
+* <span style="color:orange"> 
+ `POST` 
+ </span> 
+ **Set Autonomy Test** \
 `http://localhost:8080/set_autonomy_test`
 <details>
   <summary>
@@ -233,7 +264,10 @@ You can use the WebSocket API to receive telemetry and send requests to control 
 Robots data and status can be received periodically in the following path: \
 `ws://localhost:8080/telemetry`
 
-* <span style="color:green"> `onmessage` </span> **General Robot Info** \
+* <span style="color:green"> 
+ `onmessage` 
+ </span> 
+ **General Robot Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -256,7 +290,10 @@ Robots data and status can be received periodically in the following path: \
   ```
 </details>
 \
-* <span style="color:green"> `onmessage` </span> **State Estimation Info** \
+* <span style="color:green"> 
+  `onmessage` 
+  </span> 
+  **State Estimation Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -317,7 +354,10 @@ Robots data and status can be received periodically in the following path: \
   ```
 </details>
 \  
-* <span style="color:green"> `onmessage` </span> **Control Info** \
+* <span style="color:green"> 
+  `onmessage` 
+  </span> 
+  **Control Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -336,7 +376,10 @@ Robots data and status can be received periodically in the following path: \
   ```
 </details>
 \
-* <span style="color:green"> `onmessage` </span> **Collision Avoidance  Info** \
+* <span style="color:green"> 
+  `onmessage` 
+  </span> 
+  **Collision Avoidance  Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -355,7 +398,10 @@ Robots data and status can be received periodically in the following path: \
   ```
 </details>
 \
-* <span style="color:green"> `onmessage` </span> **UAV Info** \
+* <span style="color:green">
+  `onmessage` 
+  </span> 
+  **UAV Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -374,7 +420,9 @@ Robots data and status can be received periodically in the following path: \
   ```
 </details>
 \
-* <span style="color:green"> `onmessage` </span>  **System Health Info** \
+* <span style="color:green">
+  `onmessage` </span>
+  **System Health Info** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
@@ -434,7 +482,10 @@ Robots data and status can be received periodically in the following path: \
   
 #### Missions Feedback  
 
-* <span style="color:green"> `onmessage` </span> **Waypoint Mission and Autonomy Test Feedback** \
+* <span style="color:green">
+ `onmessage`
+ </span>
+ **Waypoint Mission and Autonomy Test Feedback** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
