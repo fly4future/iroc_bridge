@@ -23,8 +23,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/takeoff`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -47,8 +46,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/hover`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -72,8 +70,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/land`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -95,8 +92,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/land_home`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -121,8 +117,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/set_safety_border`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -159,8 +154,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/set_obstacle`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
@@ -199,8 +193,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/set_waypoint_mission`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
   ```json
   {
@@ -251,8 +244,7 @@ The requests and responses are in JSON format.
 `http://localhost:8080/set_autonomy_test`
 <details>
   <summary>
-  **Body** 
-  <span style="color:gray"> raw (json) </span>
+  **Body** <span style="color:gray"> raw (json) </span>
   </summary>
 
   ```json
