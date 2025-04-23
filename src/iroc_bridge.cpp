@@ -212,8 +212,9 @@ private:
   result_t callService(ros::ServiceClient& sc, const bool val);
 
   std::thread th_death_check_;
+  std::thread th_telemetry_check_;
   void        routine_death_check();
-  std::set<crow::websocket::connection*> telemetry_connections_;
+  crow::websocket::connection*           active_telemetry_connection_ = nullptr;
   std::mutex mtx_telemetry_connections_;
   
   bool active_border_callback_;
@@ -336,26 +337,30 @@ void IROCBridge::onInit() {
   // Remote control websocket
   CROW_WEBSOCKET_ROUTE(http_srv_, "/rc")
       .onopen([&](crow::websocket::connection& conn) {
-        ROS_INFO_STREAM("[IROCBridge]: New remote control websocket connection: " << conn.userdata());
+        ROS_INFO_STREAM("[IROCBridge]: New remote control websocket connection: " << &conn);
         ROS_INFO_STREAM("[IROCBridge]: New remote control websocket connection: " << conn.get_remote_ip());
       })
       .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << &conn << " closed: " << reason);
       })
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
   // Telemetry websocket
   CROW_WEBSOCKET_ROUTE(http_srv_, "/telemetry")
       .onopen([&](crow::websocket::connection& conn) {
-        ROS_INFO_STREAM("[IROCBridge]: New telemetry websocket connection: " << conn.userdata());
+        ROS_INFO_STREAM("[IROCBridge]: New telemetry websocket connection: " << &conn);
         ROS_INFO_STREAM("[IROCBridge]: New telemetry websocket connection: " << conn.get_remote_ip());
         std::scoped_lock lock(mtx_telemetry_connections_);
-        telemetry_connections_.insert(&conn);
+        active_telemetry_connection_ = &conn;
       })
       .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << &conn << " closed: " << reason);
         std::scoped_lock lock(mtx_telemetry_connections_);
-        telemetry_connections_.erase(&conn);
+        if (active_telemetry_connection_ == &conn) {
+          active_telemetry_connection_ = nullptr;
+        }
       });
 
   th_http_srv_ = std::thread([&]() { http_srv_.loglevel(crow::LogLevel::ERROR).port(server_port).concurrency(_http_server_threads_).run(); });
@@ -922,11 +927,17 @@ void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
 
 /* sendTelemetryJsonMessage() //{ */
 void IROCBridge::sendTelemetryJsonMessage(const std::string& type, json& json_msg) {
+
   json_msg["type"] = type; 
   std::string message = json_msg.dump();
-  std::scoped_lock lock(mtx_telemetry_connections_);
-  for (auto* conn : telemetry_connections_) {
-      conn->send_text(message);
+
+  if (active_telemetry_connection_) {
+    try {
+      active_telemetry_connection_->send_text(message);
+    } catch (const std::exception& e) {
+      ROS_WARN_STREAM("Websocket send_text failed, removing connection: " << e.what());
+      active_telemetry_connection_ = nullptr;
+    }
   }
 }
 //}
