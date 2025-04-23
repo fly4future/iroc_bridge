@@ -1,6 +1,6 @@
-## IROC Bridge Signaling Protocol Specification
-This documents outlines the signaling protocol used by the IROC Bridge package to communicate between clients.
-Designed to communicate between web client and ROS.
+# IROC Bridge Signaling Protocol Specification
+This document outlines the signaling protocol  IROC Bridge package uses to communicate with clients.
+Designed to communicate between the web client and ROS.
 
 ## HTTP API
 
@@ -12,7 +12,7 @@ The requests and responses are in JSON format.
 * <span style="color:green"> 
  `GET` 
  </span> 
- **Avalaible Robots** \
+ **Available Robots** \
 `http://localhost:8080/available_robots`
 
 #### Actions
@@ -184,7 +184,9 @@ The requests and responses are in JSON format.
   ```
 </details>
 
-#### Mission commands
+## Missions 
+
+The missions are handled by `IROC Fleet Manager`: node responsible of sending the mission to the robots, monitoring their progress and sending the aggregated information to the `IROC Bridge`. 
 
 * <span style="color:orange"> 
   `POST` 
@@ -253,15 +255,154 @@ The requests and responses are in JSON format.
     "segment_length": 2
   }
   ```
+  > [NOTE]
+  > For safety reasons we only allow one UAV, and can only be called after takeoff. The second parameter to specify by the user is the length within the trajectory segments.  
+
 </details>
+
+### Feedback  
+
+During an active mission, the feedback message is broadcasted to the connected clients.
+
+* <span style="color:green">
+ `onmessage`
+ </span>
+ **Waypoint Mission and Autonomy Test Feedback** \
+<details>
+  <summary>
+  **Message** <span style="color:gray"> raw (json) </span>
+  </summary>
+  
+  ```json
+  {
+    "progress": 0.75,
+    "mission_state": "IN_PROGRESS",
+    "message": "EXECUTING",
+    "robots": [
+      {
+        "robot_name": "uav1",
+        "message": "EXECUTING",
+        "mission_progress": 0.6,
+        "current_goal": 2,
+        "distance_to_goal": 15.3,
+        "goal_estimated_arrival_time": 30,
+        "goal_progress": 0.8,
+        "distance_to_finish": 50.2,
+        "finish_estimated_arrival_time": 50
+      },
+      {
+        "robot_name": "uav2",
+        "message": "EXECUTING",
+        "mission_progress": 0.45,
+        "current_goal": 1,
+        "distance_to_goal": 5.7,
+        "goal_estimated_arrival_time": 30,
+        "goal_progress": 0.95,
+        "distance_to_finish": 75.8,
+        "finish_estimated_arrival_time": 50
+      }
+    ]
+  }
+  ```
+</details>
+
+> [NOTE]
+> Autonomy test follows the same structure as the waypoint mission feedback, but it will always contain only one robot. 
+
+### Result 
+* When a mission is finished, the `Mission Done` message will be sent through a
+<span style="color:orange"> 
+`POST`
+</span> 
+request to the endpoint \ 
+`http://localhost:8080/api/robot/telemetry/WaypointMissionDone`
+<details>
+  <summary>
+  **Body** <span style="color:gray"> raw (json) </span>
+  </summary>
+
+  ```json
+  {
+    "success": true,
+    "message": "All robots finished succesfully",
+    "robot_results": [
+      {
+        "robot_name": "uav1",
+        "success": true,
+        "message": "Robot finished successfully"
+      },
+      {
+        "robot_name": "uav2",
+        "success": true, 
+        "message": "Robot finished successfully"
+      }
+    ]
+  }
+  ```
+</details>
+
+### Mission Control Endpoints 
+We support for both fleet-wide and individual robot mission control.
+
+
+
+
+**Fleet Mission Control**: \
+These endpoints control the mission status for all assigned robots at once: \
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Start Mission for all robots** \
+`http://localhost:8080/fleet/mission/start`
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Pause Mission for all robots** \
+`http://localhost:8080/fleet/mission/pause`
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Stop Mission for all robots** \
+`http://localhost:8080/fleet/mission/stop`
+
+
+**Robot Mission Control**: \
+You can also control individual mission robots using these endpoints:
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Start Mission for specific robots** \
+`http://localhost:8080/robots/{_robot_name_}/start`
+
+> [NOTE]
+> When starting a single robot, the mission will start and the rest of the robots will be waiting for their activation. Can still call `/fleet/mission/start` to start the remaining robots.
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Pause Mission for specific robots** \
+`http://localhost:8080/robots/{_robot_name_}/pause`
+
+* <span style="color:orange"> 
+  `POST` 
+  </span> 
+  **Stop Mission for specific robots** \
+`http://localhost:8080/robots/{_robot_name_}/pause`
+
+> [NOTE]
+> By design, we are currently aborting the general mission, aborting all other robots, once you stop one of the robots. This behavior assumes all of the robots are needed for the mission. 
 
 ## WebSocket API
 
-You can use the WebSocket API to receive telemetry and send requests to control the robots. 
+You can use the WebSocket API to receive robots telemetry and send requests to control the robots. 
 
 ### Telemetry
 
-Robots data and status can be received periodically in the following path: \
+Robot's data and status can be received periodically in the following path: \
 `ws://localhost:8080/telemetry`
 
 * <span style="color:green"> 
@@ -479,53 +620,55 @@ Robots data and status can be received periodically in the following path: \
 
   </details>
   
-  
-#### Missions Feedback  
+### Robot control remote
+
+You can use the WebSocket API to control the robots in the following path: \
+`ws://localhost:8080/rc`
 
 * <span style="color:green">
  `onmessage`
  </span>
- **Waypoint Mission and Autonomy Test Feedback** \
+ **Remote Control** \
 <details>
   <summary>
   **Message** <span style="color:gray"> raw (json) </span>
   </summary>
   
-  ```json
-  {
-    "progress": 0.75,
-    "mission_state": "IN_PROGRESS",
-    "message": "EXECUTING",
-    "robots": [
-      {
-        "robot_name": "uav1",
-        "message": "EXECUTING",
-        "mission_progress": 0.6,
-        "current_goal": 2,
-        "distance_to_goal": 15.3,
-        "goal_estimated_arrival_time": 30,
-        "goal_progress": 0.8,
-        "distance_to_finish": 50.2,
-        "finish_estimated_arrival_time": 50
-      },
-      {
-        "robot_name": "uav2",
-        "message": "EXECUTING",
-        "mission_progress": 0.45,
-        "current_goal": 1,
-        "distance_to_goal": 5.7,
-        "goal_estimated_arrival_time": 30,
-        "goal_progress": 0.95,
-        "distance_to_finish": 75.8,
-        "finish_estimated_arrival_time": 50
+  There are 2 types of supported commands: 
+  * **Message**: Similar to a ping websocket message.
+   ```json
+   {
+      "command": "message",
+      "data": "Hello, World!"
+    }
+   ```
+  *  **Movement**: To control the UAV, it receives normalized linear (`x`,`y`,`z`) and angular (`yaw`) velocities.
+   ```json
+   {
+      "command": "move",
+      "robot_name": "uav1",
+      "data": {
+          "x": 1.0,
+          "y": -0.5,
+          "z": 0,
+          "heading": 1.0
       }
-    ]
-  }
-  ```
+   }
+   ```
 </details>
 
-> [!NOTE]
-> Autonomy test follows the same structure as the waypoint mission feedback, however it will always contain only one robot. 
+## Camera stream using WebRTC
 
+The features for the camera streaming are available, and the setup can be tested by starting the simulator with the camera argument for that will start the gazebo simulator:
+
+```sh
+./start --camera
+```
+
+This will start the WebRTC server and can visualize the camera stream in `localhost:9090`.
+
+> [NOTE]
+> Please follow the instructions for the dependencies installation in the `webrtc_ros` repository: (https://github.com/fly4future/webrtc_ros)
+ A  detailed example of how the integration can be done: https://github.com/fly4future/webrtc_ros/blob/develop/web/TUTORIAL.md
 
  
