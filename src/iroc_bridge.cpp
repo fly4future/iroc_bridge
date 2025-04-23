@@ -166,6 +166,7 @@ private:
   void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info, const std::string& robot_name);
 
   void             sendJsonMessage(const std::string& msg_type,json& json_msg);
+  void             sendTelemetryJsonMessage(const std::string& type, json& json_msg);
   robot_handler_t* findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
 
   result_t takeoffAction(const std::vector<std::string>& robot_names);
@@ -211,8 +212,11 @@ private:
   result_t callService(ros::ServiceClient& sc, const bool val);
 
   std::thread th_death_check_;
+  std::thread th_telemetry_check_;
   void        routine_death_check();
-
+  crow::websocket::connection*           active_telemetry_connection_ = nullptr;
+  std::mutex mtx_telemetry_connections_;
+  
   bool active_border_callback_;
 
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
@@ -333,13 +337,31 @@ void IROCBridge::onInit() {
   // Remote control websocket
   CROW_WEBSOCKET_ROUTE(http_srv_, "/rc")
       .onopen([&](crow::websocket::connection& conn) {
-        ROS_WARN_STREAM("[IROCBridge]: New websocket connection: " << conn.userdata());
-        ROS_INFO_STREAM("[IROCBridge]: New websocket connection: " << conn.get_remote_ip());
+        ROS_INFO_STREAM("[IROCBridge]: New remote control websocket connection: " << &conn);
+        ROS_INFO_STREAM("[IROCBridge]: New remote control websocket connection: " << conn.get_remote_ip());
       })
       .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << &conn << " closed: " << reason);
       })
       .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+  // Telemetry websocket
+  CROW_WEBSOCKET_ROUTE(http_srv_, "/telemetry")
+      .onopen([&](crow::websocket::connection& conn) {
+        ROS_INFO_STREAM("[IROCBridge]: New telemetry websocket connection: " << &conn);
+        ROS_INFO_STREAM("[IROCBridge]: New telemetry websocket connection: " << conn.get_remote_ip());
+        std::scoped_lock lock(mtx_telemetry_connections_);
+        active_telemetry_connection_ = &conn;
+      })
+      .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << &conn << " closed: " << reason);
+        std::scoped_lock lock(mtx_telemetry_connections_);
+        if (active_telemetry_connection_ == &conn) {
+          active_telemetry_connection_ = nullptr;
+        }
+      });
 
   th_http_srv_ = std::thread([&]() { http_srv_.loglevel(crow::LogLevel::ERROR).port(server_port).concurrency(_http_server_threads_).run(); });
   ROS_INFO("[IROCBridge]: Threads using %d ", http_srv_.concurrency());
@@ -521,7 +543,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
       {"message", "Fleet manager died in ongoing mission"},
       {"robot_results", "Fleet manager died in ongoing mission"},
     };
-    sendJsonMessage("WaypointMissionDone", json_msg);
+    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
 
   } else {
     if (result->success) {
@@ -547,7 +569,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
       {"robot_results", robots_results} 
     };
 
-    sendJsonMessage("WaypointMissionDone", json_msg);
+    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
   }
 }
 //}
@@ -588,7 +610,7 @@ void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::Waypo
       {"robots", json_msgs}
   };
   
-  sendJsonMessage("WaypointMissionFeedback", json_msg);
+  sendTelemetryJsonMessage("WaypointMissionFeedback", json_msg);
 }
 //}
 
@@ -617,7 +639,7 @@ void IROCBridge::autonomyTestDoneCallback(
       {"result", "Fleet manager died in ongoing mission"},
       {"success", false}
     };
-    sendJsonMessage("WaypointMissionDone", json_msg);
+    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
   } else {
     if (result->success) {
       ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
@@ -642,7 +664,7 @@ void IROCBridge::autonomyTestDoneCallback(
       {"robot_results", robots_results} 
     };
 
-    sendJsonMessage("AutonomyTestDone", json_msg);
+    sendTelemetryJsonMessage("AutonomyTestDone", json_msg);
   }
 }
 //}
@@ -685,7 +707,7 @@ void IROCBridge::autonomyTestFeedbackCallback(const iroc_fleet_manager::Autonomy
   // Add the robots array to the main message
   json_msg["robots"] = std::move(json_msgs);
 
-  sendJsonMessage("AutonomyTestFeedback", json_msg);
+  sendTelemetryJsonMessage("AutonomyTestFeedback", json_msg);
 }
 //}
   
@@ -714,7 +736,7 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
     }
   };
 
-   sendJsonMessage("GeneralRobotInfo", json_msg);
+   sendTelemetryJsonMessage("GeneralRobotInfo", json_msg);
 }
 //}
 
@@ -779,7 +801,7 @@ void IROCBridge::parseStateEstimationInfo(mrs_robot_diagnostics::StateEstimation
     }}
   };
 
-  sendJsonMessage("StateEstimationInfo", json_msg);
+  sendTelemetryJsonMessage("StateEstimationInfo", json_msg);
 }
 //}
 
@@ -798,7 +820,7 @@ void IROCBridge::parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr c
     {"thrust", control_info->thrust}
   };
 
-  sendJsonMessage("ControlInfo", json_msg);
+  sendTelemetryJsonMessage("ControlInfo", json_msg);
 }
 //}
 
@@ -813,7 +835,7 @@ void IROCBridge::parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvo
         collision_avoidance_info->other_robots_visible.end())}, 
   };
 
-  sendJsonMessage("CollisionAvoidanceInfo", json_msg);
+  sendTelemetryJsonMessage("CollisionAvoidanceInfo", json_msg);
 }
 //}
 
@@ -828,7 +850,7 @@ void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info,
     {"mass_nominal", uav_info->mass_nominal}
   };
 
-  sendJsonMessage("UavInfo", json_msg);
+  sendTelemetryJsonMessage("UavInfo", json_msg);
 }
 //}
 
@@ -879,14 +901,14 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
     {"available_sensors", available_sensors}
   };
 
-  sendJsonMessage("SystemHealthInfo", json_msg);
+  sendTelemetryJsonMessage("SystemHealthInfo", json_msg);
 }
 //}
 
 // --------------------------------------------------------------
 // |                       helper methods                       |
 // --------------------------------------------------------------
-
+// to remove
 /* sendJsonMessage() //{ */
 void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
   const std::string url          = "/api/robot/telemetry/" + msg_type;
@@ -900,6 +922,23 @@ void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
     ROS_WARN_STREAM_THROTTLE(1.0, "Failed to send PATCH request to address \"" << url << "\": " << to_string(res.error()));
 
   return;
+}
+//}
+
+/* sendTelemetryJsonMessage() //{ */
+void IROCBridge::sendTelemetryJsonMessage(const std::string& type, json& json_msg) {
+
+  json_msg["type"] = type; 
+  std::string message = json_msg.dump();
+
+  if (active_telemetry_connection_) {
+    try {
+      active_telemetry_connection_->send_text(message);
+    } catch (const std::exception& e) {
+      ROS_WARN_STREAM("Websocket send_text failed, removing connection: " << e.what());
+      active_telemetry_connection_ = nullptr;
+    }
+  }
 }
 //}
 
