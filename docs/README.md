@@ -104,9 +104,9 @@ Endpoints for controlling the robot environment.
   Set the safety area obstacles.
   </span>
   <details>
-  <summary>
-  <i>Body</i> <span style="color: gray">raw (json)</span>
-  </summary>
+    <summary>
+    <i>Body</i> <span style="color: gray">raw (json)</span>
+    </summary>
 
   ```json
   {
@@ -207,6 +207,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
     "terminal_action": 1
   }
   ```
+
   </details>
 
 #### Feedback
@@ -217,7 +218,7 @@ During an active mission, the feedback message is broadcasted to the connected c
   **Waypoint Mission and Autonomy Test Feedback.**
   <details>
   <summary>
-  *Message* <span style="color: gray">raw (json)</span>
+  <i>Message</i> <span style="color: gray">raw (json)</span>
   </summary>
 
   ```json
@@ -356,7 +357,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **General Robot Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
   ```json
@@ -381,7 +382,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **State Estimation Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
     ```json
@@ -443,7 +444,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **Control Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
     ```json
@@ -463,7 +464,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **Collision Avoidance Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
     ```json
@@ -483,7 +484,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **UAV Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
   ```json
@@ -504,7 +505,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   **System Health Info**
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
   ```json
@@ -551,13 +552,13 @@ Robot's data and status can be received periodically in the `/telemetry` path.
 You can use the WebSocket API to control the robots in the `/rc` path.
 
 - <b style="color: orange">`onmessage`</b>
-  **Message**  
+  **Message**   
   <span style="color: gray">
   Similar to a ping websocket message.
   </span>
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
   ```json
@@ -576,22 +577,21 @@ You can use the WebSocket API to control the robots in the `/rc` path.
   </span>
   <details>
     <summary>
-    *Message* <span style="color: gray">raw (json)</span>
+    <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
-  {
-    "command": "move",
-    "robot_name": "uav1",
-    "data": {
-      "x": 1.0,
-      "y": -0.5,
-      "z": 0,
-      "heading": 1.0
+    ```json
+    {
+      "command": "move",
+      "robot_name": "uav1",
+      "data": {
+        "x": 1.0,
+        "y": -0.5,
+        "z": 0,
+        "heading": 1.0
+      }
     }
-  }
-  ```
-
+    ```
   </details>
 
 ## Camera stream using WebRTC
