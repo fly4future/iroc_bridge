@@ -1,2 +1,5 @@
 markdown: GFM
-theme: jekyll-theme-cayman
+title: IROC Bridge Signaling Protocol Specification
+remote_theme: poole/hyde
+plugins:
+- jekyll-remote-theme
