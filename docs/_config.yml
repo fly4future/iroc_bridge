@@ -1,4 +1,6 @@
 markdown: kramdown
 highlighter: rouge
 kramdown:
+  input: GFM
+  parse_span_html: true 
   syntax_highlighter: rouge
