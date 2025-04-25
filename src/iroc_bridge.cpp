@@ -96,6 +96,24 @@ private:
     std::string message;
   };
 
+  struct action_result_t
+  {
+    bool           success;
+    std::string    message;
+    crow::status   status_code;
+  };
+
+  // | ---------------------- Command types --------------------- |
+  enum class CommandType {
+    Takeoff,
+    Land,
+    Hover,
+    Home,
+    Set_SafetyBorder,
+    Set_Obstacle,
+    Unknown
+  };
+
   // | ---------------------- ROS parameters ------------------ |
   double max_linear_speed_;
   double max_heading_rate_;
@@ -118,8 +136,6 @@ private:
     ros::ServiceClient sc_land_home;
     ros::ServiceClient sc_set_safety_area;
     ros::ServiceClient sc_set_obstacle;
-    ros::ServiceClient sc_mission_activation;
-    ros::ServiceClient sc_mission_pausing;
     ros::ServiceClient sc_velocity_reference;
 
     ros::Publisher pub_path;
@@ -165,16 +181,17 @@ private:
   void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string& robot_name);
   void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info, const std::string& robot_name);
 
-  void             sendJsonMessage(const std::string& msg_type,json& json_msg);
-  void             sendTelemetryJsonMessage(const std::string& type, json& json_msg);
-  robot_handler_t* findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
+  void                sendJsonMessage(const std::string& msg_type,json& json_msg);
+  void                sendTelemetryJsonMessage(const std::string& type, json& json_msg);
+  robot_handler_t*    findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
 
-  result_t takeoffAction(const std::vector<std::string>& robot_names);
-  result_t landAction(const std::vector<std::string>& robot_names);
-  result_t hoverAction(const std::vector<std::string>& robot_names);
-  result_t landHomeAction(const std::vector<std::string>& robot_names);
-  result_t setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyBorder& msg);
-  result_t setObstacleAction(const std::vector<std::string>& robot_names, const mrs_msgs::SetObstacleSrvRequest& req);
+  IROCBridge::CommandType commandTypeFromString(const std::string& command_type);
+  ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type);
+
+  action_result_t commandAction(const std::vector<std::string>& robot_names, const std::string& command_type);
+
+  template <typename Svc_T> 
+  action_result_t commandAction(const std::vector<std::string>& robot_names, const std::string& command_type, typename Svc_T::Request req);
 
   // REST API callbacks
   crow::response pathCallback(const crow::request& req);
@@ -186,18 +203,8 @@ private:
   crow::response changeFleetMissionStateCallback(const crow::request& req, const std::string& type);
   crow::response changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name, const std::string& type);
 
-  crow::response hoverCallback(const crow::request& req);
-  crow::response hoverAllCallback(const crow::request& req);
-
-  crow::response takeoffCallback(const crow::request& req);
-  crow::response takeoffAllCallback(const crow::request& req);
-
-  crow::response landCallback(const crow::request& req);
-  crow::response landHomeCallback(const crow::request& req);
-  crow::response landAllCallback(const crow::request& req);
-  crow::response landHomeAllCallback(const crow::request& req);
-
   crow::response availableRobotsCallback(const crow::request& req);
+  crow::response commandCallback(const crow::request& req, const std::string & command_type , std::optional<std::string> robot_name);
 
   // Websocket callbacks
   void remoteControlCallback(crow::websocket::connection& conn, const std::string& data, bool is_binary);
@@ -274,7 +281,6 @@ void IROCBridge::onInit() {
   max_heading_rate_ = param_loader.loadParam2<double>("remote_control_limits/max_heading_rate");
 
   // Remove ground-station hostname from robot names
-
   std::string              hostname_str(hostname.data());
   std::vector<std::string> filtered_robot_names = robot_names;
 
@@ -297,42 +303,36 @@ void IROCBridge::onInit() {
   http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
   // Server
+  // Do we need this?
   CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/set_safety_border").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/set_obstacle").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/set_waypoint_mission").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/set_autonomy_test").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/mission/waypoints").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/mission/autonomy-test").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1));
 
   // Missions
   //TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
-  CROW_ROUTE(http_srv_, "/fleet/mission/<string>")
+  CROW_ROUTE(http_srv_, "/mission/<string>")
       .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2));
   //TODO: CROW_REGEX_ROUTE(http_srv_, R"(/robots/(\w+)/mission/(start|stop|pause))")
   CROW_ROUTE(http_srv_, "/robots/<string>/mission/<string>")
       .methods(crow::HTTPMethod::Post)(
           std::bind(&IROCBridge::changeRobotMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-  // Hover endpoints
-  CROW_ROUTE(http_srv_, "/hover").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::hoverCallback, this, std::placeholders::_1));
-
-  CROW_ROUTE(http_srv_, "/hover_all").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::hoverAllCallback, this, std::placeholders::_1));
-
-  // Takeoff endpoints
-  CROW_ROUTE(http_srv_, "/takeoff").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::takeoffCallback, this, std::placeholders::_1));
-
-  CROW_ROUTE(http_srv_, "/takeoff_all").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::takeoffAllCallback, this, std::placeholders::_1));
-
-  // Land endpoints
-  CROW_ROUTE(http_srv_, "/land").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::landCallback, this, std::placeholders::_1));
-
-  CROW_ROUTE(http_srv_, "/land_home").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::landHomeCallback, this, std::placeholders::_1));
-
-  CROW_ROUTE(http_srv_, "/land_all").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::landAllCallback, this, std::placeholders::_1));
-
-  CROW_ROUTE(http_srv_, "/land_home_all").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::landHomeAllCallback, this, std::placeholders::_1));
-
   // Available robots endpoint
-  CROW_ROUTE(http_srv_, "/available_robots").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/robots").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1));
+
+  // Command endpoints with robot name in the path (land, takeoff, hover, home) 
+  CROW_ROUTE(http_srv_, "/robots/<string>/<string>").methods(crow::HTTPMethod::Post)
+    ([this](const crow::request& req, const std::string& robot_name, const std::string& command_type) {
+     return this->commandCallback(req, command_type, robot_name);
+     });
+
+  // Command endpoint for all robots (land, takeoff, hover, home) 
+  CROW_ROUTE(http_srv_, "/robots/<string>").methods(crow::HTTPMethod::Post)
+    ([this](const crow::request& req, const std::string& command_type) {
+     return this->commandCallback(req, command_type, std::nullopt);
+     });
 
   // Remote control websocket
   CROW_WEBSOCKET_ROUTE(http_srv_, "/rc")
@@ -417,14 +417,6 @@ void IROCBridge::onInit() {
 
       robot_handler.sc_land_home = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land_home"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land_home\' -> \'%s\'", robot_handler.sc_land_home.getService().c_str());
-
-      // To remove
-      robot_handler.sc_mission_activation = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_activation"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_activation\' -> \'%s\'", robot_handler.sc_mission_activation.getService().c_str());
-
-      // To remove
-      robot_handler.sc_mission_pausing = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_pausing"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_set_safety_area.getService().c_str());
@@ -569,7 +561,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
       {"robot_results", robots_results} 
     };
 
-    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
+    sendJsonMessage("results", json_msg);
   }
 }
 //}
@@ -664,7 +656,7 @@ void IROCBridge::autonomyTestDoneCallback(
       {"robot_results", robots_results} 
     };
 
-    sendTelemetryJsonMessage("AutonomyTestDone", json_msg);
+    sendJsonMessage("result", json_msg);
   }
 }
 //}
@@ -908,10 +900,9 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 // --------------------------------------------------------------
 // |                       helper methods                       |
 // --------------------------------------------------------------
-// to remove
 /* sendJsonMessage() //{ */
 void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
-  const std::string url          = "/api/robot/telemetry/" + msg_type;
+  const std::string url          = "/api/mission/" + msg_type;
   const std::string body         = json_msg.dump();
   const std::string content_type = "application/json";
   const auto        res          = http_client_->Post(url, body, content_type);
@@ -999,185 +990,113 @@ IROCBridge::robot_handler_t* IROCBridge::findRobotHandler(const std::string& rob
 }
 //}
 
-// --------------------------------------------------------------
-// |                   Action implementations                   |
-// --------------------------------------------------------------
+/* commandTypeFromString() //{ */
 
-/* takeoffAction() method //{ */
-IROCBridge::result_t IROCBridge::takeoffAction(const std::vector<std::string>& robot_names) {
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  bool              everything_ok = true;
-  std::stringstream ss;
-  ss << "Result:\n";
-
-  // check that all robot names are valid and find the corresponding robot handlers
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling takeoff.");
-  for (const auto& robot_name : robot_names) {
-    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr) {
-      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_takeoff);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
-        everything_ok = false;
-      }
-    } else {
-      ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
-      everything_ok = false;
-    }
-  }
-
-  return {everything_ok, ss.str()};
+IROCBridge::CommandType IROCBridge::commandTypeFromString(const std::string& command_type) {
+    if (command_type == "takeoff") return CommandType::Takeoff;
+    if (command_type == "land")   return CommandType::Land;
+    if (command_type == "hover")  return CommandType::Hover;
+    if (command_type == "home")   return CommandType::Home;
+    if (command_type == "set_safety_border")   return CommandType::Set_SafetyBorder;
+    if (command_type == "set_obstacle")        return CommandType::Set_Obstacle;
+    return CommandType::Unknown;
 }
 //}
 
-/* hoverAction() method //{ */
-IROCBridge::result_t IROCBridge::hoverAction(const std::vector<std::string>& robot_names) {
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  bool              everything_ok = true;
-  std::stringstream ss;
-  ss << "Result:\n";
-
-  // check that all robot names are valid and find the corresponding robot handlers
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling hover.");
-  for (const auto& robot_name : robot_names) {
-    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr) {
-      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_hover);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
-        everything_ok = false;
-      }
-    } else {
-      ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
-      everything_ok = false;
-    }
+/* getServiceClient() method //{ */
+ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type) {
+  switch (command_type) {
+    case CommandType::Takeoff: return &(rh_ptr->sc_takeoff);
+    case CommandType::Land: return &(rh_ptr->sc_land);
+    case CommandType::Hover: return &(rh_ptr->sc_hover);
+    case CommandType::Home: return &(rh_ptr->sc_land_home);
+    case CommandType::Set_SafetyBorder: return &(rh_ptr->sc_set_safety_area);
+    case CommandType::Set_Obstacle: return &(rh_ptr->sc_set_obstacle);
+    default: return nullptr;
   }
-
-  return {everything_ok, ss.str()};
 }
 //}
 
-/* landAction() method //{ */
-IROCBridge::result_t IROCBridge::landAction(const std::vector<std::string>& robot_names) {
+/* commandAction() method //{ */
+IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::string>& robot_names, const std::string& command_type) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   bool              everything_ok = true;
   std::stringstream ss;
+  crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
+  auto command_type_enum = commandTypeFromString(command_type);
 
   // check that all robot names are valid and find the corresponding robot handlers
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling land.");
+  ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_land);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
+      if (client_ptr != nullptr) {
+        const auto resp = callService<std_srvs::Trigger>(*client_ptr);
+        if (!resp.success) {
+          ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+          everything_ok = false;
+          status_code = crow::status::BAD_REQUEST;
+        }  
+      } else {
+        ss << "Command type \"" << command_type << "\" not found, skipping\n";
+        ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Command type \"" << command_type << "\" not found. Skipping.");
         everything_ok = false;
+        status_code = crow::status::NOT_FOUND;
       }
+
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
       ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
+      status_code = crow::status::NOT_FOUND;
     }
   }
 
-  return {everything_ok, ss.str()};
+  return {everything_ok, ss.str(), status_code};
 }
-//}
 
-/* landHomeAction() method //{ */
-IROCBridge::result_t IROCBridge::landHomeAction(const std::vector<std::string>& robot_names) {
+template <typename Svc_T>
+IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::string>& robot_names, const std::string& command_type, typename Svc_T::Request req) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
   bool              everything_ok = true;
   std::stringstream ss;
+  crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
+  auto command_type_enum = commandTypeFromString(command_type);
 
   // check that all robot names are valid and find the corresponding robot handlers
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling land home.");
+  ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      const auto resp = callService<std_srvs::Trigger>(rh_ptr->sc_land_home);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
+      if (client_ptr != nullptr) {
+        const auto resp = callService<Svc_T>(*client_ptr, req);
+        if (!resp.success) {
+          ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
+          everything_ok = false;
+          status_code = crow::status::BAD_REQUEST;
+        }  
+      } else {
+        ss << "Command type \"" << command_type << "\" not found, skipping\n";
+        ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Command type \"" << command_type << "\" not found. Skipping.");
         everything_ok = false;
+        status_code = crow::status::NOT_FOUND;
       }
+
     } else {
       ss << "robot \"" << robot_name << "\" not found, skipping\n";
       ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
       everything_ok = false;
+      status_code = crow::status::NOT_FOUND;
     }
   }
 
-  return {everything_ok, ss.str()};
-}
-//}
-
-/* setSafetyBorderAction() method //{ */
-IROCBridge::result_t IROCBridge::setSafetyBorderAction(const std::vector<std::string>& robot_names, const mrs_msgs::SafetyBorder& msg) {
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  bool              everything_ok = true;
-  std::stringstream ss;
-  ss << "Result:\n";
-
-  // check that all robot names are valid and find the corresponding robot handlers
-  mrs_msgs::SetSafetyBorderSrvRequest req;
-  req.safety_border = msg;
-
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety border service.");
-  for (const auto& robot_name : robot_names) {
-    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr) {
-      const auto resp = callService<mrs_msgs::SetSafetyBorderSrv>(rh_ptr->sc_set_safety_area, req);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
-        everything_ok = false;
-      }
-    } else {
-      ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
-      everything_ok = false;
-    }
-  }
-
-  return {everything_ok, ss.str()};
-}
-//}
-
-/* setObstacleAction() method //{ */
-IROCBridge::result_t IROCBridge::setObstacleAction(const std::vector<std::string>& robot_names, const mrs_msgs::SetObstacleSrvRequest& req) {
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  bool              everything_ok = true;
-  std::stringstream ss;
-  ss << "Result:\n";
-
-  // check that all robot names are valid and find the corresponding robot handlers
-
-  ROS_INFO_STREAM_THROTTLE(1.0, "Calling set safety obstacle service.");
-  for (const auto& robot_name : robot_names) {
-    auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-    if (rh_ptr != nullptr) {
-      const auto resp = callService<mrs_msgs::SetObstacleSrv>(rh_ptr->sc_set_obstacle, req);
-      if (!resp.success) {
-        ss << "Call for robot \"" << robot_name << "\" was not successful with message: " << resp.message << "\n";
-        everything_ok = false;
-      }
-    } else {
-      ss << "robot \"" << robot_name << "\" not found, skipping\n";
-      ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Robot \"" << robot_name << "\" not found. Skipping.");
-      everything_ok = false;
-    }
-  }
-
-  return {everything_ok, ss.str()};
+  return {everything_ok, ss.str(), status_code};
 }
 //}
 
@@ -1325,13 +1244,15 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
   for (const auto& rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
 
-  const auto result = setSafetyBorderAction(robot_names, safety_border);
+  // check that all robot names are valid and find the corresponding robot handlers
+  mrs_msgs::SetSafetyBorderSrvRequest service_request;
+  service_request.safety_border = safety_border;
+  mrs_msgs::SetSafetyBorderSrv::Request req_srv = service_request;
 
+  const auto result = commandAction<mrs_msgs::SetSafetyBorderSrv>(robot_names, "set_safety_border" , req_srv);
   active_border_callback_ = false;
-  if (result.success)
-    return crow::response(crow::status::CREATED, "{\"message\": \"Safety zone created successfully.\"}");
-  else
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"Safety zone creation failed.\"}");
+
+  return crow::response(result.status_code, result.message);
 }
 //}
 
@@ -1411,12 +1332,9 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
   for (const auto& rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
 
-  const auto result = setObstacleAction(robot_names, obstacle_req);
+  const auto result = commandAction<mrs_msgs::SetObstacleSrv>(robot_names, "set_obstacle", obstacle_req);
 
-  if (result.success)
-    return crow::response(crow::status::CREATED, "{\"message\": \"" + result.message + "\"}");
-  else
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + result.message + "\"}");
+  return crow::response(result.status_code, result.message);
 }
 //}
 
@@ -1722,7 +1640,7 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
 }
 //}
 
-/* hoverCallback() method //{ */
+/* commandCallback() method //{ */
 
 /**
  * \brief Callback that sends a `hover` command to the robots specified in the request body.
@@ -1730,192 +1648,24 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
  *
  * \return res Crow response
  */
-crow::response IROCBridge::hoverCallback(const crow::request& req)
+crow::response IROCBridge::commandCallback(const crow::request& req,
+    const std::string & command_type,
+    std::optional<std::string> robot_name)
 {
   std::scoped_lock lck(robot_handlers_.mtx);
-
-
-  crow::json::rvalue json_msg = crow::json::load(req.body);
-  if (!json_msg || !json_msg.has("robot_names"))
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'robot_names' key\"}");
-
   std::vector<std::string> robot_names;
-  for (const auto& el : json_msg["robot_names"])
-    robot_names.push_back(el.s());
 
-  const auto result = hoverAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
+  if (robot_name.has_value()) {
+    robot_names.push_back(robot_name.value());
+  } else {
+    robot_names.reserve(robot_handlers_.handlers.size()); 
+    for (const auto& rh : robot_handlers_.handlers) {
+      robot_names.push_back(rh.robot_name);
+    }
+  }
 
-/* hoverAllCallback() method //{ */
-
-/**
- * \brief Callback that sends a `hover` command to all robots in the fleet.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::hoverAllCallback([[maybe_unused]] const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
-
-  const auto result = hoverAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
-
-/* takeoffCallback() method //{ */
-
-/**
- * \brief Callback that sends a `takeoff` command to the robots specified in the request body.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::takeoffCallback(const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  crow::json::rvalue json_msg = crow::json::load(req.body);
-  if (!json_msg || !json_msg.has("robot_names"))
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'robot_names' key\"}");
-
-  std::vector<std::string> robot_names;
-  for (const auto& el : json_msg["robot_names"])
-    robot_names.push_back(el.s());
-
-  const auto result = takeoffAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
-
-/* takeoffAllCallback() method //{ */
-
-/**
- * \brief Callback that sends a `takeoff` command to all robots in the fleet.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::takeoffAllCallback([[maybe_unused]] const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
-
-  const auto result = takeoffAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
-
-/* landCallback() method //{ */
-
-/**
- * \brief Callback that sends a `land` command to the robots specified in the request body.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::landCallback(const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  crow::json::rvalue json_msg = crow::json::load(req.body);
-  if (!json_msg || !json_msg.has("robot_names"))
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'robot_names' key: " + req.body + "\"}");
-
-  std::vector<std::string> robot_names;
-  for (const auto& el : json_msg["robot_names"])
-    robot_names.push_back(el.s());
-
-  const auto result = landAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
-
-/* landHomeCallback() method //{ */
-
-/**
- * \brief Callback that sends a `land` command to the robots specified in the request body.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::landHomeCallback(const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  crow::json::rvalue json_msg = crow::json::load(req.body);
-  if (!json_msg || !json_msg.has("robot_names"))
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'robot_names' key\"}");
-
-  std::vector<std::string> robot_names;
-  for (const auto& el : json_msg["robot_names"])
-    robot_names.push_back(el.s());
-
-  const auto result = landHomeAction(robot_names);
-  return crow::response(crow::status::ACCEPTED, result.message);
-}
-//}
-
-/* landAllCallback() method //{ */
-
-/**
- * \brief Callback that sends a `land` command to the robots specified in the request body.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::landAllCallback([[maybe_unused]] const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
-
-  const auto result = landAction(robot_names);
-
-  json json_msg;
-  json_msg["message"] = result.message;
-
-  return crow::response(crow::status::ACCEPTED, json_msg.dump());
-}
-//}
-
-/* landHomeAllCallback() method //{ */
-
-/**
- * \brief Callback that sends a `land_home` command to all robots in the fleet.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::landHomeAllCallback([[maybe_unused]] const crow::request& req)
-{
-  std::scoped_lock lck(robot_handlers_.mtx);
-
-  std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
-
-  const auto result = landHomeAction(robot_names);
-
-  json json_msg;
-  json_msg["message"] = result.message;
-
-  return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  const auto result = commandAction(robot_names, command_type);
+  return crow::response(result.status_code, result.message);
 }
 //}
 
