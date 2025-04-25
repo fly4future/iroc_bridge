@@ -1,5 +1,5 @@
 title: IROC bridge
-description: Signaling protocol specification for IROC
+description: Signaling protocol specification
 markdown: GFM
 remote_theme: jekyll/minima@master
 highlighter: rouge
