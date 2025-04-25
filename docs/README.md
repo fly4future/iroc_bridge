@@ -12,47 +12,47 @@ The requests and responses are in JSON format.
 
 Endpoints for controlling the robots.
 
-- <b style="color: #61affe">`GET`</b>
+- <strong style="color: #61affe">`GET`</strong>
   **/robots**  
   <span style="color: gray">
   List available robots.
   </span>
-- <b style="color: #48cc90">`POST`</b>
+- <strong style="color: #48cc90">`POST`</strong>
   **/robots/{_robot_name_}/takeoff**  
   <span style="color: gray">
   Command takeoff (single)
   </span>
-- <b style="color: #49CC90">`POST`</b>
+- <strong style="color: #49CC90">`POST`</strong>
   **/robots/takeoff**  
   <span style="color: gray">
   Takeoff all robots
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/hover**  
   <span style="color: gray">
   Command hover (single)
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/hover**  
   <span style="color: gray">
   Hover all robots
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/land**  
   <span style="color: gray">
   Command land (single)
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/land**  
   <span style="color: gray">
   Land all robots
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/home**  
   <span style="color: gray">
   Command land home (single)
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/home**  
   <span style="color: gray">
   Land home all robots
@@ -62,15 +62,15 @@ Endpoints for controlling the robots.
 
 Endpoints for controlling the robot environment.
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/safety-area/borders**  
   <span style="color: gray">
   Set the safety area borders.
   </span>
   <details>
-  <summary><i>Body</i> <span style="color: gray">raw (json)</span></summary>
+  <summary><em>Body</em> <span style="color: gray">raw (json)</span></summary>
 
-  ````json
+  ```json
   {
     "points": [
       {
@@ -94,21 +94,21 @@ Endpoints for controlling the robot environment.
     "max_z": 347,
     "min_z": 343
   }
-  ````
+  ```
 
   </details>
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/safety-area/obstacles**  
   <span style="color: gray">
   Set the safety area obstacles.
   </span>
   <details>
     <summary>
-    <i>Body</i> <span style="color: gray">raw (json)</span>
+    <em>Body</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ````json
+  ```json
   {
     "points": [
       {
@@ -132,7 +132,7 @@ Endpoints for controlling the robot environment.
     "max_z": 347,
     "min_z": 343
   }
-  ````
+  ```
 
   </details>
 
@@ -140,17 +140,17 @@ Endpoints for controlling the robot environment.
 
 The missions are handled by `IROC Fleet Manager`: node responsible of sending the mission to the robots, monitoring their progress and sending the aggregated information to the `IROC Bridge`.
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/waypoints**  
   <span style="color: gray">
   Set the waypoints for the mission.
   </span>
   <details>
   <summary>
-  <i>Body</i> <span style="color: gray">raw (json)</span>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ````json
+  ```json
   {
     "robot_name": "uav1",
     "frame_id": 0,
@@ -171,21 +171,21 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
     ],
     "terminal_action": 1
   }
-  ````
+  ```
 
   </details>
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/autonomy-test**  
   <span style="color: gray">
   Set the autonomy test for the mission.
   </span>
   <details>
   <summary>
-  <i>Body</i> <span style="color: gray">raw (json)</span>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ````json
+  ```json
   {
     "robot_name": "uav1",
     "frame_id": 0,
@@ -206,7 +206,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
     ],
     "terminal_action": 1
   }
-  ````
+  ```
 
   </details>
 
@@ -214,14 +214,14 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
 During an active mission, the feedback message is broadcasted to the connected clients through a WebSocket in the `/telemetry` path.
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **Waypoint Mission and Autonomy Test Feedback.**
   <details>
   <summary>
-  <i>Message</i> <span style="color: gray">raw (json)</span>
+  <em>Message</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ````json
+  ```json
   {
     "type": "WaypointMissionFeedback",
     "progress": 0.75,
@@ -252,7 +252,7 @@ During an active mission, the feedback message is broadcasted to the connected c
       }
     ]
   }
-  ````
+  ```
 
   </details>
 
@@ -263,7 +263,7 @@ During an active mission, the feedback message is broadcasted to the connected c
 
 When a mission is finished, the result message message will be sent to
 
-<b style="color: #49cc90">`POST`</b>
+<strong style="color: #49cc90">`POST`</strong>
 **http://server:8000/api/missions/result**  
 <span style="color: gray">
 Send the result of the mission.
@@ -271,10 +271,10 @@ Send the result of the mission.
 
 <details>
   <summary>
-  <i>Body</i> <span style="color: gray">raw (json)</span>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-````json
+```json
 {
   "success": true,
   "message": "All robots finished succesfully",
@@ -291,7 +291,7 @@ Send the result of the mission.
     }
   ]
 }
-````
+```
 
 </details>
 
@@ -303,17 +303,17 @@ We support for both fleet-wide and individual robot mission control.
 
 These endpoints control the mission status for all assigned robots at once: \
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/start**  
   <span style="color: gray">
   Start the mission for all robots.
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/pause**  
   <span style="color: gray">
   Pause the mission for all robots.
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/stop**  
   <span style="color: gray">
   Stop the mission for all robots.
@@ -323,7 +323,7 @@ These endpoints control the mission status for all assigned robots at once: \
 
 You can also control individual mission robots using these endpoints:
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/mission/start**  
    <span style="color: gray">
   Start the mission for a specific robot.
@@ -332,12 +332,12 @@ You can also control individual mission robots using these endpoints:
   > [!NOTE]
   > Starting a mission for a single robot will activate that robot while the others remain in a waiting state. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
 
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/mission/pause**  
   <span style="color: gray">
   Pause the mission for a specific robot.
   </span>
-- <b style="color: #49cc90">`POST`</b>
+- <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/mission/stop**  
    <span style="color: gray">
   Stop the mission for a specific robot.
@@ -353,14 +353,14 @@ You can use the WebSocket API to receive robots telemetry and send requests to c
 
 Robot's data and status can be received periodically in the `/telemetry` path.
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **General Robot Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ````json
+  ```json
   {
     "errors": [],
     "type": "GeneralRobotInfo",
@@ -374,15 +374,15 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     "robot_type": 0,
     "robot_name": "uav2"
   }
-  ````
+  ```
 
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **State Estimation Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
     
     ````json
@@ -440,11 +440,11 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     ````
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **Control Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
     
     ````json
@@ -460,11 +460,11 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     ````
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **Collision Avoidance Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
     
     ````json
@@ -480,14 +480,14 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     ````
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **UAV Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ````json
+  ```json
   {
     "mass_nominal": null,
     "type": "UavInfo",
@@ -497,18 +497,18 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     "armed": 1,
     "robot_name": "uav2"
   }
-  ````
+  ```
 
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **System Health Info**
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ````json
+  ```json
   {
     "free_ram": 22.789223,
     "robot_name": "uav2",
@@ -543,7 +543,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
       }
     ]
   }
-  ````
+  ```
 
   </details>
 
@@ -551,56 +551,57 @@ Robot's data and status can be received periodically in the `/telemetry` path.
 
 You can use the WebSocket API to control the robots in the `/rc` path.
 
-- <b style="color: orange">`onmessage`</b>
-  **Message**   
+- <strong style="color: orange">`onmessage`</strong>
+  **Message**  
   <span style="color: gray">
   Similar to a ping websocket message.
   </span>
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ````json
+  ```json
   {
     "command": "message",
     "data": "Hello, World!"
   }
-  ````
+  ```
 
   </details>
 
-- <b style="color: orange">`onmessage`</b>
+- <strong style="color: orange">`onmessage`</strong>
   **Movement**  
   <span style="color: gray">
   To control the UAV, it receives normalized linear (`x`, `y`, `z`) and angular (`yaw`) velocities.
   </span>
   <details>
     <summary>
-    <i>Message</i> <span style="color: gray">raw (json)</span>
+    <em>Message</em> <span style="color: gray">raw (json)</span>
     </summary>
 
-    ````json
-    {
-      "command": "move",
-      "robot_name": "uav1",
-      "data": {
-        "x": 1.0,
-        "y": -0.5,
-        "z": 0,
-        "heading": 1.0
-      }
+  ```json
+  {
+    "command": "move",
+    "robot_name": "uav1",
+    "data": {
+      "x": 1.0,
+      "y": -0.5,
+      "z": 0,
+      "heading": 1.0
     }
-    ````
+  }
+  ```
+
   </details>
 
 ## Camera stream using WebRTC
 
 The features for the camera streaming are available, and the setup can be tested by starting the simulator with the camera argument for that will start the gazebo simulator:
 
-````sh
+```sh
 ./start --camera
-````
+```
 
 This will start the WebRTC server and allow the camera stream to be visualized on port `9090` of the server.
 
