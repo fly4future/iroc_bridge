@@ -70,7 +70,7 @@ Endpoints for controlling the robot environment.
   <details>
   <summary><i>Body</i> <span style="color: gray">raw (json)</span></summary>
 
-  ```json
+  ````json
   {
     "points": [
       {
@@ -94,7 +94,7 @@ Endpoints for controlling the robot environment.
     "max_z": 347,
     "min_z": 343
   }
-  ```
+  ````
 
   </details>
 
@@ -108,7 +108,7 @@ Endpoints for controlling the robot environment.
     <i>Body</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
+  ````json
   {
     "points": [
       {
@@ -132,7 +132,7 @@ Endpoints for controlling the robot environment.
     "max_z": 347,
     "min_z": 343
   }
-  ```
+  ````
 
   </details>
 
@@ -150,7 +150,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   <i>Body</i> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
+  ````json
   {
     "robot_name": "uav1",
     "frame_id": 0,
@@ -171,7 +171,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
     ],
     "terminal_action": 1
   }
-  ```
+  ````
 
   </details>
 
@@ -185,7 +185,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   <i>Body</i> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
+  ````json
   {
     "robot_name": "uav1",
     "frame_id": 0,
@@ -206,7 +206,7 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
     ],
     "terminal_action": 1
   }
-  ```
+  ````
 
   </details>
 
@@ -221,7 +221,7 @@ During an active mission, the feedback message is broadcasted to the connected c
   <i>Message</i> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
+  ````json
   {
     "type": "WaypointMissionFeedback",
     "progress": 0.75,
@@ -252,7 +252,7 @@ During an active mission, the feedback message is broadcasted to the connected c
       }
     ]
   }
-  ```
+  ````
 
   </details>
 
@@ -274,7 +274,7 @@ Send the result of the mission.
   <i>Body</i> <span style="color: gray">raw (json)</span>
   </summary>
 
-```json
+````json
 {
   "success": true,
   "message": "All robots finished succesfully",
@@ -291,7 +291,7 @@ Send the result of the mission.
     }
   ]
 }
-```
+````
 
 </details>
 
@@ -360,7 +360,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
+  ````json
   {
     "errors": [],
     "type": "GeneralRobotInfo",
@@ -374,7 +374,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     "robot_type": 0,
     "robot_name": "uav2"
   }
-  ```
+  ````
 
   </details>
 
@@ -385,7 +385,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
-    ```json
+    ````json
     {
       "type": "StateEstimationInfo",
       "switchable_estimators": [
@@ -437,7 +437,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
       "estimation_frame": "uav2/gps_garmin_origin",
       "robot_name": "uav2"
     }
-    ```
+    ````
   </details>
 
 - <b style="color: orange">`onmessage`</b>
@@ -447,7 +447,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
-    ```json
+    ````json
     {
       "type": "ControlInfo",
       "thrust": null,
@@ -457,7 +457,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
       "active_controller": "unknown",
       "robot_name": "uav2"
     }
-    ```
+    ````
   </details>
 
 - <b style="color: orange">`onmessage`</b>
@@ -467,7 +467,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
     
-    ```json
+    ````json
     {
       "type": "CollisionAvoidanceInfo",
       "other_robots_visible": [
@@ -477,7 +477,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
       "avoiding_collision": 0,
       "robot_name": "uav2"
     }
-    ```
+    ````
   </details>
 
 - <b style="color: orange">`onmessage`</b>
@@ -487,7 +487,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
+  ````json
   {
     "mass_nominal": null,
     "type": "UavInfo",
@@ -497,7 +497,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     "armed": 1,
     "robot_name": "uav2"
   }
-  ```
+  ````
 
   </details>
 
@@ -508,7 +508,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
+  ````json
   {
     "free_ram": 22.789223,
     "robot_name": "uav2",
@@ -543,7 +543,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
       }
     ]
   }
-  ```
+  ````
 
   </details>
 
@@ -561,12 +561,12 @@ You can use the WebSocket API to control the robots in the `/rc` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-  ```json
+  ````json
   {
     "command": "message",
     "data": "Hello, World!"
   }
-  ```
+  ````
 
   </details>
 
@@ -580,7 +580,7 @@ You can use the WebSocket API to control the robots in the `/rc` path.
     <i>Message</i> <span style="color: gray">raw (json)</span>
     </summary>
 
-    ```json
+    ````json
     {
       "command": "move",
       "robot_name": "uav1",
@@ -591,16 +591,16 @@ You can use the WebSocket API to control the robots in the `/rc` path.
         "heading": 1.0
       }
     }
-    ```
+    ````
   </details>
 
 ## Camera stream using WebRTC
 
 The features for the camera streaming are available, and the setup can be tested by starting the simulator with the camera argument for that will start the gazebo simulator:
 
-```sh
+````sh
 ./start --camera
-```
+````
 
 This will start the WebRTC server and allow the camera stream to be visualized on port `9090` of the server.
 
