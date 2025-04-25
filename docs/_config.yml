@@ -1,5 +1,4 @@
-markdown: GFM
-title: IROC Bridge Signaling Protocol Specification
-remote_theme: poole/hyde
-plugins:
-- jekyll-remote-theme
+markdown: kramdown
+kramdown:
+  parse_block_html: true
+  syntax_highlighter: rouge
