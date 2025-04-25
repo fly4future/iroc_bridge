@@ -1,4 +1,4 @@
-# IROC Bridge Signaling Protocol Specification
+# Signaling Protocol Specification
 
 This document outlines the signaling protocol IROC Bridge package uses to communicate with clients.
 Designed to communicate between the web client and ROS.
@@ -67,8 +67,10 @@ Endpoints for controlling the robot environment.
   <span style="color: gray">
   Set the safety area borders.
   </span>
-  <details>
-  <summary><em>Body</em> <span style="color: gray">raw (json)</span></summary>
+  <details> 
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
 
   ```json
   {
@@ -256,7 +258,7 @@ During an active mission, the feedback message is broadcasted to the connected c
 
   </details>
 
-> [!NOTE]
+> **NOTE** \
 > Autonomy test follows the same structure as the waypoint mission feedback, but it will always contain only one robot.
 
 #### Result
@@ -329,7 +331,7 @@ You can also control individual mission robots using these endpoints:
   Start the mission for a specific robot.
   </span>
 
-  > [!NOTE]
+  > **NOTE** \
   > Starting a mission for a single robot will activate that robot while the others remain in a waiting state. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
 
 - <strong style="color: #49cc90">`POST`</strong>
@@ -342,7 +344,7 @@ You can also control individual mission robots using these endpoints:
    <span style="color: gray">
   Stop the mission for a specific robot.
   </span>
-  > [!NOTE]
+  > **NOTE** \
   > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
 
 ## WebSocket API
@@ -605,5 +607,5 @@ The features for the camera streaming are available, and the setup can be tested
 
 This will start the WebRTC server and allow the camera stream to be visualized on port `9090` of the server.
 
-> [!NOTE]
+> **NOTE** \
 > Please follow the instructions for the installation of dependencies in the [webrtc_ros](https://github.com/fly4future/webrtc_ros) repository. A detailed example of how the integration can be done is [here](https://github.com/fly4future/webrtc_ros/blob/develop/web/TUTORIAL.md).

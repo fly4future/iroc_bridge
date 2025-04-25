@@ -1,6 +1,11 @@
-markdown: kramdown
+title: IROC bridge
+markdown: GFM
+remote_theme: jekyll/minima@master
 highlighter: rouge
-kramdown:
-  input: GFM
-  parse_span_html: true 
-  syntax_highlighter: rouge
+minima:
+  skin: "auto"
+  hide_site_feed_link: true
+  social_links:
+    - title: GitHub
+      icon: github
+      url: "https://github.com/fly4future/iroc_bridge"
