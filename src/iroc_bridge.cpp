@@ -103,6 +103,17 @@ private:
     crow::status   status_code;
   };
 
+  // | ---------------------- Command types --------------------- |
+  enum class CommandType {
+    Takeoff,
+    Land,
+    Hover,
+    Home,
+    Set_SafetyBorder,
+    Set_Obstacle,
+    Unknown
+  };
+
   // | ---------------------- ROS parameters ------------------ |
   double max_linear_speed_;
   double max_heading_rate_;
@@ -125,8 +136,6 @@ private:
     ros::ServiceClient sc_land_home;
     ros::ServiceClient sc_set_safety_area;
     ros::ServiceClient sc_set_obstacle;
-    ros::ServiceClient sc_mission_activation;
-    ros::ServiceClient sc_mission_pausing;
     ros::ServiceClient sc_velocity_reference;
 
     ros::Publisher pub_path;
@@ -175,7 +184,9 @@ private:
   void                sendJsonMessage(const std::string& msg_type,json& json_msg);
   void                sendTelemetryJsonMessage(const std::string& type, json& json_msg);
   robot_handler_t*    findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
-  ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const std::string& command_type);
+
+  IROCBridge::CommandType commandTypeFromString(const std::string& command_type);
+  ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type);
 
   action_result_t commandAction(const std::vector<std::string>& robot_names, const std::string& command_type);
 
@@ -270,7 +281,6 @@ void IROCBridge::onInit() {
   max_heading_rate_ = param_loader.loadParam2<double>("remote_control_limits/max_heading_rate");
 
   // Remove ground-station hostname from robot names
-
   std::string              hostname_str(hostname.data());
   std::vector<std::string> filtered_robot_names = robot_names;
 
@@ -407,14 +417,6 @@ void IROCBridge::onInit() {
 
       robot_handler.sc_land_home = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land_home"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land_home\' -> \'%s\'", robot_handler.sc_land_home.getService().c_str());
-
-      // To remove
-      robot_handler.sc_mission_activation = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_activation"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_activation\' -> \'%s\'", robot_handler.sc_mission_activation.getService().c_str());
-
-      // To remove
-      robot_handler.sc_mission_pausing = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/mission_pausing"));
-      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/mission_pausing\' -> \'%s\'", robot_handler.sc_mission_pausing.getService().c_str());
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_set_safety_area.getService().c_str());
@@ -559,7 +561,7 @@ void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state,
       {"robot_results", robots_results} 
     };
 
-    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
+    sendJsonMessage("results", json_msg);
   }
 }
 //}
@@ -654,7 +656,7 @@ void IROCBridge::autonomyTestDoneCallback(
       {"robot_results", robots_results} 
     };
 
-    sendTelemetryJsonMessage("AutonomyTestDone", json_msg);
+    sendJsonMessage("result", json_msg);
   }
 }
 //}
@@ -898,10 +900,9 @@ void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::
 // --------------------------------------------------------------
 // |                       helper methods                       |
 // --------------------------------------------------------------
-// to remove
 /* sendJsonMessage() //{ */
 void IROCBridge::sendJsonMessage(const std::string& msg_type,json& json_msg) {
-  const std::string url          = "/api/robot/telemetry/" + msg_type;
+  const std::string url          = "/api/mission/" + msg_type;
   const std::string body         = json_msg.dump();
   const std::string content_type = "application/json";
   const auto        res          = http_client_->Post(url, body, content_type);
@@ -989,18 +990,30 @@ IROCBridge::robot_handler_t* IROCBridge::findRobotHandler(const std::string& rob
 }
 //}
 
+/* commandTypeFromString() //{ */
+
+IROCBridge::CommandType IROCBridge::commandTypeFromString(const std::string& command_type) {
+    if (command_type == "takeoff") return CommandType::Takeoff;
+    if (command_type == "land")   return CommandType::Land;
+    if (command_type == "hover")  return CommandType::Hover;
+    if (command_type == "home")   return CommandType::Home;
+    if (command_type == "set_safety_border")   return CommandType::Set_SafetyBorder;
+    if (command_type == "set_obstacle")        return CommandType::Set_Obstacle;
+    return CommandType::Unknown;
+}
+//}
+
 /* getServiceClient() method //{ */
-ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const std::string& command_type) {
-  if (command_type == "takeoff")
-    return &(rh_ptr->sc_takeoff);
-  else if (command_type == "land")
-    return &(rh_ptr->sc_land);
-  else if (command_type == "hover")
-    return &(rh_ptr->sc_hover);
-  else if (command_type == "home")
-    return &(rh_ptr->sc_land_home);
-  else
-    return nullptr;
+ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type) {
+  switch (command_type) {
+    case CommandType::Takeoff: return &(rh_ptr->sc_takeoff);
+    case CommandType::Land: return &(rh_ptr->sc_land);
+    case CommandType::Hover: return &(rh_ptr->sc_hover);
+    case CommandType::Home: return &(rh_ptr->sc_land_home);
+    case CommandType::Set_SafetyBorder: return &(rh_ptr->sc_set_safety_area);
+    case CommandType::Set_Obstacle: return &(rh_ptr->sc_set_obstacle);
+    default: return nullptr;
+  }
 }
 //}
 
@@ -1012,13 +1025,14 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
+  auto command_type_enum = commandTypeFromString(command_type);
 
   // check that all robot names are valid and find the corresponding robot handlers
   ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      auto* client_ptr = getServiceClient(rh_ptr, command_type);
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
       if (client_ptr != nullptr) {
         const auto resp = callService<std_srvs::Trigger>(*client_ptr);
         if (!resp.success) {
@@ -1052,13 +1066,14 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
+  auto command_type_enum = commandTypeFromString(command_type);
 
   // check that all robot names are valid and find the corresponding robot handlers
   ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      auto* client_ptr = getServiceClient(rh_ptr, command_type);
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
       if (client_ptr != nullptr) {
         const auto resp = callService<Svc_T>(*client_ptr, req);
         if (!resp.success) {
