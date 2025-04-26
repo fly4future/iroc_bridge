@@ -1,5 +1,3 @@
--------
-<!-- # TODO: remove the line when https://github.com/jekyll/minima fixes the bug (double title) in the theme -->
 # Signaling Protocol Specification
 
 This document outlines the signaling protocol IROC Bridge package uses to communicate with clients.
