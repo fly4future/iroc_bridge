@@ -67,6 +67,7 @@
 
       <!-- Services -->
       <remap from="~ac/waypoint_mission" to="iroc_fleet_manager" />
+      <remap from="~ac/coverage_mission" to="iroc_coverage_planner" />
       <remap from="~ac/autonomy_test" to="iroc_autonomy_test" />
       <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
       <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />

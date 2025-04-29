@@ -1,0 +1,14 @@
+{
+  "robots": [
+    "uav1",
+    "uav2"
+  ], 
+  "search_area": [
+    {"x": 0, "y": 0},
+    {"x": 0, "y": 0}
+  ],
+  "frame_id": 0,
+  "height_id": 0,
+  "height": 10,
+  "terminal_action": 0
+}
