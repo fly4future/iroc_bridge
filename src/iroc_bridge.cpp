@@ -553,14 +553,14 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
     for (size_t i = 0; i < result->robots_results.size(); i++) {
       robots_results[i] = {
         {"robot_name", result->robots_results[i].name},
-        {"success", result->robots_results[i].success}, 
+        {"success", static_cast<bool>(result->robots_results[i].success)}, 
         {"message", result->robots_results[i].message} 
       };
     }
 
     // Create the main JSON object
     json json_msg = {
-      {"success", result->success},
+      {"success", static_cast<bool>(result->success)},
       {"message", result->message},
       {"robot_results", robots_results} 
     };
