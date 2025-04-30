@@ -1100,6 +1100,56 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 }
 //}
 
+/* toJson() method //{ */
+
+template <typename Result>
+json resultToJson(const boost::shared_ptr<const Result>& result) {
+  json robots_results = json::list(); 
+
+  for (size_t i = 0; i < result->robots_results.size(); i++) {
+    robots_results[i] = {
+      {"robot_name", result->robots_results[i].name},
+      {"success", static_cast<bool>(result->robots_results[i].success)}, 
+      {"message", result->robots_results[i].message} 
+    };
+  }
+
+  // Create the main JSON object
+  json json_msg = {
+    {"success", static_cast<bool>(result->success)},
+    {"message", result->message},
+    {"robot_results", robots_results} 
+  };
+
+  return json_msg;
+}
+//}
+
+/* successMissionJson() method //{ */
+
+template <typename MissionRobot>
+json successMissionJson(std::vector<MissionRobot> mission_robots) {
+  json robots_results = json::list(); 
+
+  for (size_t i = 0; i < mission_robots.size(); i++) {
+    robots_results[i] = {
+      {"robot_name", mission_robots[i].name},
+      {"success", true }, 
+      {"message", "Robot received the mission successfully"} 
+    };
+  }
+
+  // Create the main JSON object
+  json json_msg = {
+    {"success", true},
+    {"message", "Mission uploaded successfully"},
+    {"robot_results", robots_results} 
+  };
+
+  return json_msg;
+}
+//}
+
 // --------------------------------------------------------------
 // |                     REST API callbacks                     |
 // --------------------------------------------------------------
@@ -1447,13 +1497,15 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
 
     if (action_client_ptr_->getState().isDone()) {  // If the action is done, the action finished instantly
       auto result = action_client_ptr_->getResult();
+      auto json   = resultToJson(result); 
       const auto message = result->message;
       ROS_WARN("[IROCBridge]: %s", message.c_str());
-      return crow::response(crow::status::SERVICE_UNAVAILABLE, "{\"message\": \"" + message + "\"}");
+      return crow::response(crow::status::BAD_REQUEST, json);
     }
     else {
       ROS_INFO("[IROCBridge]: Mission received successfully");
-      return crow::response(crow::status::CREATED, "{\"message\": \"Mission received successfully\"}");
+      auto json = successMissionJson(mission_robots);
+      return crow::response(crow::status::CREATED, json);
     }
   }
   catch (const std::exception& e) {
