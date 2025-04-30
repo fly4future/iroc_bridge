@@ -172,17 +172,6 @@ private:
   template <typename Feedback> 
   void missionFeedbackCallback(const boost::shared_ptr<const Feedback>& feedback); 
 
-  // Waypoint mission
-  void waypointMissionActiveCallback();
-  void waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result);
-  void waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& result);
-
-  // Autonomy test
-  void autonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
-  void autonomyTestDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
-                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots);
-  void autonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
-                                   const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot);
   // | ------------------ Additional functions ------------------ |
 
   void parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string& robot_name);
@@ -529,102 +518,7 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 // |                  action client callbacks                   |
 // --------------------------------------------------------------
 
-//TODO: Improve the mission callbacks to use template functions
-/* waypointMissionActiveCallback //{ */
-void IROCBridge::waypointMissionActiveCallback() {
-  ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
-
-  /* ROS_INFO_STREAM("[IROCBridge]: Action client state " << action_client_ptr_->getState().toString()); */
-  // for (const auto& robot : robots) {
-    // ROS_INFO_STREAM(robot);
-  // }
-}
-//}
-
-/* waypointMissionDoneCallback //{ */
-void IROCBridge::waypointMissionDoneCallback(const SimpleClientGoalState& state, const iroc_fleet_manager::WaypointFleetManagerResultConstPtr& result) {
-  if (result == NULL) {
-    ROS_WARN(
-        "[IROCBridge]: Probably fleet_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
-        "restarted need to upload a new mission!");
-
-    // Create JSON with Crow
-    json json_msg = {
-      {"success", false},
-      {"message", "Fleet manager died in ongoing mission"},
-      {"robot_results", "Fleet manager died in ongoing mission"},
-    };
-    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
-
-  } else {
-    if (result->success) {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
-    } else {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
-    }
-
-    json robots_results = json::list(); 
-
-    for (size_t i = 0; i < result->robots_results.size(); i++) {
-      robots_results[i] = {
-        {"robot_name", result->robots_results[i].name},
-        {"success", result->robots_results[i].success}, 
-        {"message", result->robots_results[i].message} 
-      };
-    }
-
-    // Create the main JSON object
-    json json_msg = {
-      {"success", result->success},
-      {"message", result->message},
-      {"robot_results", robots_results} 
-    };
-
-    sendJsonMessage("results", json_msg);
-  }
-}
-//}
-
-/* waypointMissionFeedbackCallback //{ */
-void IROCBridge::waypointMissionFeedbackCallback(const iroc_fleet_manager::WaypointFleetManagerFeedbackConstPtr& feedback) {
-  auto robots_feedback = feedback->info.robots_feedback;
-  
-  // Create a list for robot feedback
-  json json_msgs = json::list();
-
-  // Collect each robot feedback and create a json for each
-  for (size_t i = 0; i < robots_feedback.size(); i++) {
-    const auto& rfb = robots_feedback[i];
-    
-    json robot_json = {
-        {"robot_name", rfb.name},
-        {"message", rfb.message},
-        {"mission_progress", rfb.mission_progress},
-        {"current_goal", rfb.goal_idx},
-        {"distance_to_goal", rfb.distance_to_closest_goal},
-        {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
-        {"goal_progress", rfb.goal_progress},
-        {"distance_to_finish", rfb.distance_to_finish},
-        {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
-    };
-    
-    // Add to the list at index i
-    json_msgs[i] = std::move(robot_json);
-  }
-
-  // Create the main JSON message
-  json json_msg = {
-      {"progress", feedback->info.progress}, 
-      {"mission_state", feedback->info.state}, 
-      {"message", feedback->info.message}, 
-      {"robots", json_msgs}
-  };
-  
-  sendTelemetryJsonMessage("WaypointMissionFeedback", json_msg);
-}
-//}
-
-// Template mission feedback
+// Mission callbacks
 /* missionActiveCallback //{ */
 void IROCBridge::missionActiveCallback() {
   ROS_INFO_STREAM("[IROCBridge]: Mission Action server for robots: ");
@@ -716,103 +610,6 @@ template <typename Feedback>
 }
 //}
 
-// Autonomy test callbacks
-/* autonomyTestActiveCallback() //{ */
-void IROCBridge::autonomyTestActiveCallback(const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
-  ROS_INFO_STREAM("[IROCBridge]: Waypoint Mission Action server for robots: ");
-
-  for (const auto& robot : robots)
-    ROS_INFO_STREAM(robot);
-}
-//}
-
-/* autonomyTestDoneCallback() //{ */
-void IROCBridge::autonomyTestDoneCallback(
-    const SimpleClientGoalState& state, 
-    const iroc_fleet_manager::AutonomyTestResultConstPtr& result,
-    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robots) {
-  if (result == NULL) {
-    ROS_WARN(
-        "[IROCBridge]: Probably fleet handler died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
-        "restarted need to upload a new mission!");
-
-    // Create JSON with Crow
-    json json_msg = {
-      {"result", "Fleet manager died in ongoing mission"},
-      {"success", false}
-    };
-    sendTelemetryJsonMessage("WaypointMissionDone", json_msg);
-  } else {
-    if (result->success) {
-      ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
-    } else {
-      ROS_WARN_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString());
-    }
-
-    json robots_results = json::list(); 
-
-    for (size_t i = 0; i < result->robots_results.size(); i++) {
-      robots_results[i] = {
-        {"robot_name", result->robots_results[i].name},
-        {"success", result->robots_results[i].success}, 
-        {"message", result->robots_results[i].message} 
-      };
-    }
-
-    // Create the main JSON object
-    json json_msg = {
-      {"success", result->success},
-      {"message", result->message},
-      {"robot_results", robots_results} 
-    };
-
-    sendJsonMessage("result", json_msg);
-  }
-}
-//}
-
-/* autonomyTestFeedbackCallback() //{ */
-void IROCBridge::autonomyTestFeedbackCallback(const iroc_fleet_manager::AutonomyTestFeedbackConstPtr& feedback,
-    const std::vector<iroc_fleet_manager::AutonomyTestRobot>& robot) {
-  auto robots_feedback = feedback->info.robots_feedback;
-  
-  // Create a list for robot feedback
-  json json_msgs = json::list();
-
-  // Collect each robot feedback and create a json for each
-  for (size_t i = 0; i < robots_feedback.size(); i++) {
-    const auto& rfb = robots_feedback[i];
-    
-    json robot_json = {
-        {"robot_name", rfb.name},
-        {"message", rfb.message},
-        {"mission_progress", rfb.mission_progress},
-        {"current_goal", rfb.goal_idx},
-        {"distance_to_goal", rfb.distance_to_closest_goal},
-        {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
-        {"goal_progress", rfb.goal_progress},
-        {"distance_to_finish", rfb.distance_to_finish},
-        {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
-    };
-    
-    // Add to the list at index i
-    json_msgs[i] = std::move(robot_json);
-  }
-
-  // Create the main JSON message
-  json json_msg = {
-      {"progress", feedback->info.progress}, 
-      {"mission_state", feedback->info.state}, 
-      {"message", feedback->info.message}
-  };
-  
-  // Add the robots array to the main message
-  json_msg["robots"] = std::move(json_msgs);
-
-  sendTelemetryJsonMessage("AutonomyTestFeedback", json_msg);
-}
-//}
-  
 // --------------------------------------------------------------
 // |                 parsing and output methods                 |
 // --------------------------------------------------------------
@@ -1547,10 +1344,18 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
     FleetManagerActionServerGoal action_goal;
     action_goal.robots = mission_robots;
 
-    action_client_ptr_->sendGoal(action_goal,
-                                 std::bind(&IROCBridge::waypointMissionDoneCallback, this, std::placeholders::_1, std::placeholders::_2),
-                                 std::bind(&IROCBridge::waypointMissionActiveCallback, this),
-                                 std::bind(&IROCBridge::waypointMissionFeedbackCallback, this, std::placeholders::_1));
+    action_client_ptr_->sendGoal(
+        action_goal,
+        [this](const auto& state, const auto& result) {
+          this->missionDoneCallback<iroc_fleet_manager::WaypointFleetManagerResult>(state, result);
+        },
+        [this]() {
+          this->missionActiveCallback();
+        },
+        [this](const auto& feedback) {
+          this->missionFeedbackCallback<iroc_fleet_manager::WaypointFleetManagerFeedback>(feedback);
+        }
+    );
 
     // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
     ros::Duration(mission_robots.size() * 1.0).sleep();
@@ -1749,10 +1554,18 @@ crow::response IROCBridge::autonomyTestCallback(const crow::request& req)
     return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
   }
 
-  autonomy_test_client_ptr_->sendGoal(action_goal,
-      std::bind(&IROCBridge::autonomyTestDoneCallback, this, std::placeholders::_1, std::placeholders::_2, mission_robots),
-      std::bind(&IROCBridge::autonomyTestActiveCallback, this, mission_robots),
-      std::bind(&IROCBridge::autonomyTestFeedbackCallback, this, std::placeholders::_1, mission_robots));
+  autonomy_test_client_ptr_->sendGoal(
+        action_goal,
+        [this](const auto& state, const auto& result) {
+          this->missionDoneCallback<iroc_fleet_manager::AutonomyTestResult>(state, result);
+        },
+        [this]() {
+          this->missionActiveCallback();
+        },
+        [this](const auto& feedback) {
+          this->missionFeedbackCallback<iroc_fleet_manager::AutonomyTestFeedback>(feedback);
+        }
+    );
 
   ros::Duration(mission_robots.size() * 1.0).sleep();
 
