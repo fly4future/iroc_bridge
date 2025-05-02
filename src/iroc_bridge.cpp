@@ -1518,11 +1518,15 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     if (coverage_action_client_ptr_->getState().isDone()) {  // If the action is done, the action finished instantly
       auto result = coverage_action_client_ptr_->getResult();
       const auto message = result->message;
+      auto json   = resultToJson(result); 
       ROS_WARN("[IROCBridge]: %s", message.c_str());
-      return crow::response(crow::status::SERVICE_UNAVAILABLE, "{\"message\": \"" + message + "\"}");
+      return crow::response(crow::status::SERVICE_UNAVAILABLE, json);
     }
     else {
       ROS_INFO("[IROCBridge]: Mission received successfully");
+      // TODO Add the success message to the response 
+      // auto json = successMissionJson(mission_robots);
+      // TODO change the json message
       return crow::response(crow::status::CREATED, "{\"message\": \"Mission received successfully\"}");
     }
   }
