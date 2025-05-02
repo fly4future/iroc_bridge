@@ -143,7 +143,7 @@ Endpoints for controlling the robot environment.
 The missions are handled by `IROC Fleet Manager`: node responsible of sending the mission to the robots, monitoring their progress and sending the aggregated information to the `IROC Bridge`.
 
 <figure align="center">
-  <img src=".img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto">
+  <img src="img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;"> 
   <figcaption>Mission Sequence Diagram</figcaption>
 </figure>
 
