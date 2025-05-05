@@ -1445,7 +1445,8 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
 
   try {
     crow::json::rvalue json_msg = crow::json::load(req.body);
-    if (!json_msg || !json_msg.has("mission") || json_msg["mission"].t() != crow::json::type::List)
+    if (!json_msg || !json_msg.has("robots") || json_msg["robots"].t() != crow::json::type::List
+        || !json_msg.has("search_area") || json_msg["search_area"].t() != crow::json::type::List )
       return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'mission' key\"}");
 
     // Get message properties
