@@ -119,6 +119,35 @@ private:
     Unknown
   };
 
+  enum class Change_SvC_T {
+      FleetWaypoint,
+      RobotWaypoint,
+      FleetCoverage,
+      RobotCoverage,
+      RobotAutonomyTest
+  };
+
+  std::map<std::string, CommandType> command_type_map_ = {
+      {"takeoff", CommandType::Takeoff},
+      {"land", CommandType::Land},
+      {"hover", CommandType::Hover},
+      {"home", CommandType::Home},
+      {"set_safety_area", CommandType::Set_SafetyBorder},
+      {"set_obstacle", CommandType::Set_Obstacle},
+  };
+
+  std::map<std::string, Change_SvC_T> change_type_map_ = {
+      {"waypoint", Change_SvC_T::FleetWaypoint},
+      {"coverage", Change_SvC_T::FleetCoverage},
+  };
+
+  std::map<std::string, Change_SvC_T> change_robot_type_map_ = {
+      {"waypoint", Change_SvC_T::RobotWaypoint},
+      {"coverage", Change_SvC_T::RobotCoverage},
+      {"autonomy_test", Change_SvC_T::RobotAutonomyTest},
+  };
+    
+
   // | ---------------------- ROS parameters ------------------ |
   double max_linear_speed_;
   double max_heading_rate_;
@@ -160,6 +189,8 @@ private:
   // | ----------------------- ROS Clients ----------------------- |
   ros::ServiceClient sc_change_fleet_mission_state;
   ros::ServiceClient sc_change_robot_mission_state;
+  ros::ServiceClient sc_change_coverage_mission_state;
+  ros::ServiceClient sc_change_coverage_mission_robot_state;
   ros::ServiceClient sc_change_autonomy_test_state;
   std::string        latest_mission_type_;
 
@@ -187,6 +218,8 @@ private:
 
   IROCBridge::CommandType commandTypeFromString(const std::string& command_type);
   ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type);
+  ros::ServiceClient  getServiceClient(const IROCBridge::Change_SvC_T service_type);
+ 
 
   action_result_t commandAction(const std::vector<std::string>& robot_names, const std::string& command_type);
 
@@ -446,6 +479,14 @@ void IROCBridge::onInit() {
   sc_change_robot_mission_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_robot_mission_state"));
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
            sc_change_robot_mission_state.getService().c_str());
+
+  sc_change_coverage_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_coverage_mission_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_coverage_mission_state\' -> \'%s\'",
+           sc_change_coverage_mission_state.getService().c_str());
+
+  sc_change_coverage_mission_robot_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_coverage_mission_robot_state"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
+           sc_change_coverage_mission_state.getService().c_str());
 
   sc_change_autonomy_test_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_autonomy_test_state"));
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_autonomy_test_state\' -> \'%s\'",
@@ -920,6 +961,17 @@ ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh
     case CommandType::Set_SafetyBorder: return &(rh_ptr->sc_set_safety_area);
     case CommandType::Set_Obstacle: return &(rh_ptr->sc_set_obstacle);
     default: return nullptr;
+  }
+}
+
+ros::ServiceClient IROCBridge::getServiceClient(const IROCBridge::Change_SvC_T service_type) {
+  switch (service_type) {
+    case Change_SvC_T::FleetWaypoint: return sc_change_fleet_mission_state;
+    case Change_SvC_T::RobotWaypoint: return sc_change_robot_mission_state;
+    case Change_SvC_T::FleetCoverage: return sc_change_coverage_mission_state;
+    case Change_SvC_T::RobotCoverage: return sc_change_coverage_mission_robot_state;
+    case Change_SvC_T::RobotAutonomyTest: return sc_change_autonomy_test_state;
+    default: return ros::ServiceClient();
   }
 }
 //}
@@ -1658,7 +1710,12 @@ crow::response IROCBridge::changeFleetMissionStateCallback(const crow::request& 
   mrs_msgs::String ros_srv;
   ros_srv.request.value = type;
 
-  const auto resp = callService<mrs_msgs::String>(sc_change_fleet_mission_state, ros_srv.request);
+  ros::ServiceClient service_client;
+  auto it = change_type_map_.find(latest_mission_type_);
+  if (it != change_type_map_.end()) 
+    service_client = getServiceClient(it->second); 
+
+  const auto resp = callService<mrs_msgs::String>(service_client, ros_srv.request);
   if (!resp.success)
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + resp.message + "\"}");
   else
@@ -1690,34 +1747,23 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
   ros_srv.request.robot_name = robot_name;
   ros_srv.request.type       = type;
 
-  if (latest_mission_type_ == "waypoint") {
-    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state, ros_srv.request);
-    if (!resp.success) {
-      json_msg["message"] = "Call was not successful with message: " + resp.message;
-      ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+  ros::ServiceClient service_client;
+  auto it = change_robot_type_map_.find(latest_mission_type_);
+  if (it != change_robot_type_map_.end()) 
+    service_client = getServiceClient(it->second); 
 
-      return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
-    }
-    else {
-      json_msg["message"] = "Call successful";
-      return crow::response(crow::status::ACCEPTED, json_msg.dump());
-    }  
+
+  const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(service_client, ros_srv.request);
+  if (!resp.success) {
+    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+
+    return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
   }
-
-  if (latest_mission_type_ == "autonomy_test") {
-    const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(sc_change_autonomy_test_state, ros_srv.request);
-
-    if (!resp.success) {
-      json_msg["message"] = "Call was not successful with message: " + resp.message;
-      ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
-
-      return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
-    }
-    else {
-      json_msg["message"] = "Call successful";
-      return crow::response(crow::status::ACCEPTED, json_msg.dump());
-    }  
-  }
+  else {
+    json_msg["message"] = "Call successful";
+    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  }  
 
   return crow::response(crow::status::NOT_FOUND);
 }
