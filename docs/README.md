@@ -163,24 +163,27 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
   ```json
   {
-    "robot_name": "uav1",
-    "frame_id": 0,
-    "height_id": 0,
-    "points": [
-      {
-        "x": 10,
-        "y": 10,
-        "z": 2,
-        "heading": 1
-      },
-      {
-        "x": -10,
-        "y": 10,
-        "z": 2,
-        "heading": 3
-      }
-    ],
-    "terminal_action": 1
+  "mission": [
+    {
+      "robot_name": "uav1",
+      "frame_id": 0,
+      "height_id": 0,
+      "points": [
+        { "x": 10, "y": 10, "z": 2, "heading": 1 },
+        { "x": -10, "y": 10, "z": 2, "heading": 3 }
+      ],
+      "terminal_action": 0
+    },
+    {
+      "robot_name": "uav2",
+      "frame_id": 0,
+      "height_id": 0,
+      "points": [
+        { "x": 20, "y": 5, "z": 3, "heading": 0 }
+      ],
+      "terminal_action": 0
+    }
+  ]
   }
   ```
 
@@ -198,24 +201,8 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
   ```json
   {
-    "robot_name": "uav1",
-    "frame_id": 0,
-    "height_id": 0,
-    "points": [
-      {
-        "x": 10,
-        "y": 10,
-        "z": 2,
-        "heading": 1
-      },
-      {
-        "x": -10,
-        "y": 10,
-        "z": 2,
-        "heading": 3
-      }
-    ],
-    "terminal_action": 1
+  "robot_name": "uav1",
+  "segment_length": 2 
   }
   ```
 
