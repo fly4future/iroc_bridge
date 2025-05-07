@@ -1530,11 +1530,15 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
       }
       // Get the current robot position, to use it as the starting point of the coverage mission
       auto robot_global_pose = rh_ptr->sh_state_estimation_info.getMsg()->global_pose;
+      auto robot_local_pose = rh_ptr->sh_state_estimation_info.getMsg()->local_pose;
       // Fill the mission robot struct
       mission_robot.name            = robot;
-      mission_robot.position.x      = robot_global_pose.position.x;
-      mission_robot.position.y      = robot_global_pose.position.y;
-      mission_robot.position.z      = robot_global_pose.position.z;
+      mission_robot.global_position.x      = robot_global_pose.position.x;
+      mission_robot.global_position.y      = robot_global_pose.position.y;
+      mission_robot.global_position.z      = robot_global_pose.position.z;
+      mission_robot.local_position.x       = robot_local_pose.position.x;
+      mission_robot.local_position.y       = robot_local_pose.position.y;
+      mission_robot.local_position.z       = robot_local_pose.position.z;
       mission_robot.frame_id        = frame_id;
       mission_robot.height_id       = height_id;
       mission_robot.height          = height;
@@ -1587,22 +1591,21 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
         }
     );
 
-    // // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
-    // ros::Duration(mission_robots.size() * 1.0).sleep();
+    // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
+    bool finished_before_timeout = coverage_action_client_ptr_->waitForResult(ros::Duration(5.0));
+    ROS_INFO("[IROCBridge]: Finished before timeout: %d", finished_before_timeout);
 
-    if (coverage_action_client_ptr_->getState().isDone()) {  // If the action is done, the action finished instantly
+    if (finished_before_timeout) {
       auto result = coverage_action_client_ptr_->getResult();
       const auto message = result->message;
       auto json   = resultToJson(result); 
       ROS_WARN("[IROCBridge]: %s", message.c_str());
-      return crow::response(crow::status::SERVICE_UNAVAILABLE, json);
+      return crow::response(crow::status::BAD_REQUEST, json);
     }
     else {
       ROS_INFO("[IROCBridge]: Mission received successfully");
-      // TODO Add the success message to the response 
-      // auto json = successMissionJson(mission_robots);
-      // TODO change the json message
-      return crow::response(crow::status::CREATED, "{\"message\": \"Mission received successfully\"}");
+      auto json = successMissionJson(mission_robots);
+      return crow::response(crow::status::CREATED, json);
     }
   }
   catch (const std::exception& e) {
