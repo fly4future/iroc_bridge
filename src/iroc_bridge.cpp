@@ -50,6 +50,7 @@
 
 #include <iroc_fleet_manager/WaypointFleetManagerAction.h>
 #include <iroc_fleet_manager/CoverageMissionAction.h>
+#include <iroc_fleet_manager/CoverageMissionRobot.h>
 #include <iroc_fleet_manager/AutonomyTestAction.h>
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
@@ -1501,7 +1502,7 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
         || !json_msg.has("search_area") || json_msg["search_area"].t() != crow::json::type::List )
       return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'mission' key\"}");
 
-    // Get message properties
+    // Get message properties currently we are setting the same parameters for all robots
     std::vector<crow::json::rvalue> robots      = json_msg["robots"].lo();
     std::vector<crow::json::rvalue> search_area = json_msg["search_area"].lo();
     int frame_id                                = json_msg["frame_id"].i();
@@ -1509,11 +1510,36 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     int height_id                               = json_msg["height_id"].i();
     int terminal_action                         = json_msg["terminal_action"].i();
 
+    // To store the robots
+    std::vector<iroc_fleet_manager::CoverageMissionRobot> mission_robots;
+
     //Get the robot names
     std::vector<std::string> robot_names;
     robot_names.reserve(robots.size());
     for (const auto& robot : robots) {
       robot_names.push_back(robot.s());
+    }
+
+    for (const auto& robot : robot_names) {
+      std::scoped_lock lck(robot_handlers_.mtx);
+      iroc_fleet_manager::CoverageMissionRobot mission_robot;
+      auto*       rh_ptr     = findRobotHandler(robot, robot_handlers_);
+      if (!rh_ptr) {
+        ROS_WARN_STREAM("[IROCBridge]: Robot \"" << robot << "\" not found. Ignoring.");
+        return crow::response(crow::status::NOT_FOUND, "{\"message\": \"Robot '" + robot + "' not found\"}");
+      }
+      // Get the current robot position, to use it as the starting point of the coverage mission
+      auto robot_global_pose = rh_ptr->sh_state_estimation_info.getMsg()->global_pose;
+      // Fill the mission robot struct
+      mission_robot.name            = robot;
+      mission_robot.position.x      = robot_global_pose.position.x;
+      mission_robot.position.y      = robot_global_pose.position.y;
+      mission_robot.position.z      = robot_global_pose.position.z;
+      mission_robot.frame_id        = frame_id;
+      mission_robot.height_id       = height_id;
+      mission_robot.height          = height;
+      mission_robot.terminal_action = terminal_action;
+      mission_robots.push_back(mission_robot);
     }
 
     //Get the search area points
@@ -1545,12 +1571,8 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     // Send the action goal to the fleet manager
     coverageMissionActionServerGoal action_goal;
 
-    action_goal.mission.robots = robot_names;
+    action_goal.mission.robots      = mission_robots; 
     action_goal.mission.search_area = polygon_points;
-    action_goal.mission.frame_id = frame_id;
-    action_goal.mission.height = height;
-    action_goal.mission.height_id = height_id;
-    action_goal.mission.terminal_action = terminal_action;
 
     coverage_action_client_ptr_->sendGoal(
         action_goal,
@@ -1751,7 +1773,6 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
   auto it = change_robot_type_map_.find(latest_mission_type_);
   if (it != change_robot_type_map_.end()) 
     service_client = getServiceClient(it->second); 
-
 
   const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(service_client, ros_srv.request);
   if (!resp.success) {
