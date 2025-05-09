@@ -133,7 +133,7 @@ private:
       {"land", CommandType::Land},
       {"hover", CommandType::Hover},
       {"home", CommandType::Home},
-      {"set_safety_area", CommandType::Set_SafetyBorder},
+      {"set_safety_border", CommandType::Set_SafetyBorder},
       {"set_obstacle", CommandType::Set_Obstacle},
   };
 
@@ -217,7 +217,6 @@ private:
   void                sendTelemetryJsonMessage(const std::string& type, json& json_msg);
   robot_handler_t*    findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
 
-  IROCBridge::CommandType commandTypeFromString(const std::string& command_type);
   ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type);
   ros::ServiceClient  getServiceClient(const IROCBridge::Change_SvC_T service_type);
  
@@ -939,19 +938,6 @@ IROCBridge::robot_handler_t* IROCBridge::findRobotHandler(const std::string& rob
 }
 //}
 
-/* commandTypeFromString() //{ */
-
-IROCBridge::CommandType IROCBridge::commandTypeFromString(const std::string& command_type) {
-    if (command_type == "takeoff") return CommandType::Takeoff;
-    if (command_type == "land")   return CommandType::Land;
-    if (command_type == "hover")  return CommandType::Hover;
-    if (command_type == "home")   return CommandType::Home;
-    if (command_type == "set_safety_border")   return CommandType::Set_SafetyBorder;
-    if (command_type == "set_obstacle")        return CommandType::Set_Obstacle;
-    return CommandType::Unknown;
-}
-//}
-
 /* getServiceClient() method //{ */
 ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type) {
   switch (command_type) {
@@ -985,14 +971,24 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
-  auto command_type_enum = commandTypeFromString(command_type);
+
+  CommandType command_type_e = CommandType::Unknown;
+  auto it = command_type_map_.find(command_type);
+  if (it != command_type_map_.end()) { 
+    command_type_e = it->second;
+  } else {
+    ss << "Command type \"" << command_type << "\" not found, skipping\n";
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Command type \"" << command_type << "\" not found. Skipping.");
+    everything_ok = false;
+    status_code = crow::status::NOT_FOUND;
+  }
 
   // check that all robot names are valid and find the corresponding robot handlers
   ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_e);
       if (client_ptr != nullptr) {
         const auto resp = callService<std_srvs::Trigger>(*client_ptr);
         if (!resp.success) {
@@ -1026,14 +1022,24 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
   ss << "Result:\n";
-  auto command_type_enum = commandTypeFromString(command_type);
+
+  CommandType command_type_e = CommandType::Unknown;
+  auto it = command_type_map_.find(command_type);
+  if (it != command_type_map_.end()) { 
+    command_type_e = it->second;
+  } else {
+    ss << "Command type \"" << command_type << "\" not found, skipping\n";
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Command type \"" << command_type << "\" not found. Skipping.");
+    everything_ok = false;
+    status_code = crow::status::NOT_FOUND;
+  }
 
   // check that all robot names are valid and find the corresponding robot handlers
   ROS_INFO_STREAM("Calling command \"" << command_type << "\" .");
   for (const auto& robot_name : robot_names) {
     auto* rh_ptr = findRobotHandler(robot_name, robot_handlers_);
     if (rh_ptr != nullptr) {
-      auto* client_ptr = getServiceClient(rh_ptr, command_type_enum);
+      auto* client_ptr = getServiceClient(rh_ptr, command_type_e);
       if (client_ptr != nullptr) {
         const auto resp = callService<Svc_T>(*client_ptr, req);
         if (!resp.success) {
