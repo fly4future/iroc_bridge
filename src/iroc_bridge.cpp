@@ -55,6 +55,8 @@
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
 
+#include <iroc_mission_handler/waypointMissionGoal.h>
+
 #include <unistd.h>
 #include <iostream>
 //}
@@ -1511,7 +1513,6 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     // Get message properties currently we are setting the same parameters for all robots
     std::vector<crow::json::rvalue> robots      = json_msg["robots"].lo();
     std::vector<crow::json::rvalue> search_area = json_msg["search_area"].lo();
-    int frame_id                                = json_msg["frame_id"].i();
     int height                                  = json_msg["height"].i();
     int height_id                               = json_msg["height_id"].i();
     int terminal_action                         = json_msg["terminal_action"].i();
@@ -1545,10 +1546,10 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
       mission_robot.local_position.x       = robot_local_pose.position.x;
       mission_robot.local_position.y       = robot_local_pose.position.y;
       mission_robot.local_position.z       = robot_local_pose.position.z;
-      mission_robot.frame_id        = frame_id;
-      mission_robot.height_id       = height_id;
-      mission_robot.height          = height;
-      mission_robot.terminal_action = terminal_action;
+      mission_robot.frame_id               = iroc_mission_handler::waypointMissionGoal::FRAME_ID_LATLON;
+      mission_robot.height_id              = height_id;
+      mission_robot.height                 = height;
+      mission_robot.terminal_action        = terminal_action;
       mission_robots.push_back(mission_robot);
     }
 
