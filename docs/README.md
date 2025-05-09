@@ -142,6 +142,15 @@ Endpoints for controlling the robot environment.
 
 The missions are handled by `IROC Fleet Manager`: node responsible of sending the mission to the robots, monitoring their progress and sending the aggregated information to the `IROC Bridge`.
 
+<figure align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="img/sequence_diagram_dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="img/sequence_diagram.svg" />
+    <img src="img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;"> 
+  </picture>
+  <figcaption>Mission Sequence Diagram</figcaption>
+</figure>
+
 - <strong style="color: #49cc90">`POST`</strong>
   **/mission/waypoints**  
   <span style="color: gray">
@@ -154,24 +163,27 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
   ```json
   {
-    "robot_name": "uav1",
-    "frame_id": 0,
-    "height_id": 0,
-    "points": [
-      {
-        "x": 10,
-        "y": 10,
-        "z": 2,
-        "heading": 1
-      },
-      {
-        "x": -10,
-        "y": 10,
-        "z": 2,
-        "heading": 3
-      }
-    ],
-    "terminal_action": 1
+  "mission": [
+    {
+      "robot_name": "uav1",
+      "frame_id": 0,
+      "height_id": 0,
+      "points": [
+        { "x": 10, "y": 10, "z": 2, "heading": 1 },
+        { "x": -10, "y": 10, "z": 2, "heading": 3 }
+      ],
+      "terminal_action": 0
+    },
+    {
+      "robot_name": "uav2",
+      "frame_id": 0,
+      "height_id": 0,
+      "points": [
+        { "x": 20, "y": 5, "z": 3, "heading": 0 }
+      ],
+      "terminal_action": 0
+    }
+  ]
   }
   ```
 
@@ -189,28 +201,62 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
   ```json
   {
-    "robot_name": "uav1",
-    "frame_id": 0,
-    "height_id": 0,
-    "points": [
-      {
-        "x": 10,
-        "y": 10,
-        "z": 2,
-        "heading": 1
-      },
-      {
-        "x": -10,
-        "y": 10,
-        "z": 2,
-        "heading": 3
-      }
-    ],
-    "terminal_action": 1
+  "robot_name": "uav1",
+  "segment_length": 2 
   }
   ```
 
   </details>
+
+#### Mission Control Endpoints
+
+We support for both fleet-wide and individual robot mission control.
+
+##### Fleet Mission Control:
+
+These endpoints control the mission status for all assigned robots at once: \
+
+- <strong style="color: #49cc90">`POST`</strong>
+  **/mission/start**  
+  <span style="color: gray">
+  Start the mission for all robots.
+  </span>
+- <strong style="color: #49cc90">`POST`</strong>
+  **/mission/pause**  
+  <span style="color: gray">
+  Pause the mission for all robots.
+  </span>
+- <strong style="color: #49cc90">`POST`</strong>
+  **/mission/stop**  
+  <span style="color: gray">
+  Stop the mission for all robots.
+  </span>
+
+##### Robot Mission Control:
+
+You can also control individual mission robots using these endpoints:
+
+- <strong style="color: #49cc90">`POST`</strong>
+  **/robots/{_robot_name_}/mission/start**  
+   <span style="color: gray">
+  Start the mission for a specific robot.
+  </span>
+
+  > **NOTE** \
+  > Starting a mission for a single robot will activate that robot while the others remain in a waiting state. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
+
+- <strong style="color: #49cc90">`POST`</strong>
+  **/robots/{_robot_name_}/mission/pause**  
+  <span style="color: gray">
+  Pause the mission for a specific robot.
+  </span>
+- <strong style="color: #49cc90">`POST`</strong>
+  **/robots/{_robot_name_}/mission/stop**  
+   <span style="color: gray">
+  Stop the mission for a specific robot.
+  </span>
+  > **NOTE** \
+  > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
 
 #### Feedback
 
@@ -263,7 +309,7 @@ During an active mission, the feedback message is broadcasted to the connected c
 
 #### Result
 
-When a mission is finished, the result message message will be sent to
+When a mission is finished, the result message will be sent to
 
 <strong style="color: #49cc90">`POST`</strong>
 **http://server:8000/api/missions/result**  
@@ -279,7 +325,7 @@ Send the result of the mission.
 ```json
 {
   "success": true,
-  "message": "All robots finished succesfully",
+  "message": "All robots finished successfully",
   "robot_results": [
     {
       "robot_name": "uav1",
@@ -296,56 +342,6 @@ Send the result of the mission.
 ```
 
 </details>
-
-#### Mission Control Endpoints
-
-We support for both fleet-wide and individual robot mission control.
-
-##### Fleet Mission Control:
-
-These endpoints control the mission status for all assigned robots at once: \
-
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/start**  
-  <span style="color: gray">
-  Start the mission for all robots.
-  </span>
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/pause**  
-  <span style="color: gray">
-  Pause the mission for all robots.
-  </span>
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/stop**  
-  <span style="color: gray">
-  Stop the mission for all robots.
-  </span>
-
-##### Robot Mission Control:
-
-You can also control individual mission robots using these endpoints:
-
-- <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/start**  
-   <span style="color: gray">
-  Start the mission for a specific robot.
-  </span>
-
-  > **NOTE** \
-  > Starting a mission for a single robot will activate that robot while the others remain in a waiting state. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
-
-- <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/pause**  
-  <span style="color: gray">
-  Pause the mission for a specific robot.
-  </span>
-- <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/stop**  
-   <span style="color: gray">
-  Stop the mission for a specific robot.
-  </span>
-  > **NOTE** \
-  > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
 
 ## WebSocket API
 
