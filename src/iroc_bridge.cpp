@@ -1592,10 +1592,11 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     );
 
     // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
-    bool finished_before_timeout = coverage_action_client_ptr_->waitForResult(ros::Duration(5.0));
-    ROS_INFO("[IROCBridge]: Finished before timeout: %d", finished_before_timeout);
+    // bool finished_before_timeout = coverage_action_client_ptr_->waitForResult(ros::Duration(3.0));
+    // ROS_INFO("[IROCBridge]: Finished before timeout: %d", finished_before_timeout);
+    ros::Duration(mission_robots.size() * 1.0).sleep();
 
-    if (finished_before_timeout) {
+    if (coverage_action_client_ptr_->getState().isDone()) {
       auto result = coverage_action_client_ptr_->getResult();
       const auto message = result->message;
       auto json   = resultToJson(result); 
