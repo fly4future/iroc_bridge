@@ -190,9 +190,39 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   </details>
 
 - <strong style="color: #49cc90">`POST`</strong>
+  **/mission/coverage**  
+  <span style="color: gray">
+  Set a coverage mission.
+  </span>
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+  ```json
+  {
+  "robots": [
+    "uav1",
+    "uav2"
+  ], 
+  "search_area": [
+    {"x": 47.397978, "y": 8.545299},
+    {"x": 47.397848, "y": 8.545872},
+    {"x": 47.397551, "y": 8.545720},
+    {"x": 47.397699, "y": 8.545129}
+  ],
+  "height_id": 0,
+  "height": 10,
+  "terminal_action": 0
+  }
+  ```
+
+  </details>
+
+- <strong style="color: #49cc90">`POST`</strong>
   **/mission/autonomy-test**  
   <span style="color: gray">
-  Set the autonomy test for the mission.
+  Set the autonomy test mission.
   </span>
   <details>
   <summary>
