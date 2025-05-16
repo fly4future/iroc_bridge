@@ -30,6 +30,11 @@
 #include <mrs_msgs/String.h>
 #include <iroc_fleet_manager/ChangeRobotMissionStateSrv.h>
 
+#include <mrs_msgs/ReferenceStampedSrv.h>
+#include <mrs_msgs/ReferenceStampedSrvRequest.h>
+#include <mrs_msgs/ReferenceStampedSrvResponse.h>
+#include <mrs_msgs/ReferenceStamped.h>
+
 #include <mrs_msgs/SetSafetyBorderSrv.h>
 #include <mrs_msgs/SetSafetyBorderSrvRequest.h>
 #include <mrs_msgs/SetSafetyBorderSrvResponse.h>
@@ -117,6 +122,7 @@ private:
     Land,
     Hover,
     Home,
+    Set_Origin,
     Set_SafetyBorder,
     Set_Obstacle,
     Unknown
@@ -135,6 +141,7 @@ private:
       {"land", CommandType::Land},
       {"hover", CommandType::Hover},
       {"home", CommandType::Home},
+      {"set_origin", CommandType::Set_Origin},
       {"set_safety_border", CommandType::Set_SafetyBorder},
       {"set_obstacle", CommandType::Set_Obstacle},
   };
@@ -171,6 +178,7 @@ private:
     ros::ServiceClient sc_land;
     ros::ServiceClient sc_hover;
     ros::ServiceClient sc_land_home;
+    ros::ServiceClient sc_set_origin;
     ros::ServiceClient sc_set_safety_area;
     ros::ServiceClient sc_set_obstacle;
     ros::ServiceClient sc_velocity_reference;
@@ -230,6 +238,7 @@ private:
 
   // REST API callbacks
   crow::response pathCallback(const crow::request& req);
+  crow::response setOriginCallback(const crow::request& req);
   crow::response setSafetyBorderCallback(const crow::request& req);
   crow::response setObstacleCallback(const crow::request& req);
   crow::response waypointMissionCallback(const crow::request& req);
@@ -340,8 +349,9 @@ void IROCBridge::onInit() {
   http_client_ = std::make_unique<httplib::Client>(url, client_port);
 
   // Server
-  // Do we need this?
+  // Do we need this (set_path)?
   CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/safety-area/origin").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1));
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1));
   CROW_ROUTE(http_srv_, "/mission/waypoints").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1));
@@ -363,13 +373,13 @@ void IROCBridge::onInit() {
   // Command endpoints with robot name in the path (land, takeoff, hover, home) 
   CROW_ROUTE(http_srv_, "/robots/<string>/<string>").methods(crow::HTTPMethod::Post)
     ([this](const crow::request& req, const std::string& robot_name, const std::string& command_type) {
-     return this->commandCallback(req, command_type, robot_name);
+     return commandCallback(req, command_type, robot_name);
      });
 
   // Command endpoint for all robots (land, takeoff, hover, home) 
   CROW_ROUTE(http_srv_, "/robots/<string>").methods(crow::HTTPMethod::Post)
     ([this](const crow::request& req, const std::string& command_type) {
-     return this->commandCallback(req, command_type, std::nullopt);
+     return commandCallback(req, command_type, std::nullopt);
      });
 
   // Remote control websocket
@@ -455,6 +465,9 @@ void IROCBridge::onInit() {
 
       robot_handler.sc_land_home = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/land_home"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/land_home\' -> \'%s\'", robot_handler.sc_land_home.getService().c_str());
+
+      robot_handler.sc_set_origin = nh_.serviceClient<mrs_msgs::ReferenceStampedSrv>("/" + robot_name + nh_.resolveName("svc/set_origin"));
+      ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_origin\' -> \'%s\'", robot_handler.sc_set_origin.getService().c_str());
 
       robot_handler.sc_set_safety_area = nh_.serviceClient<mrs_msgs::SetSafetyBorderSrv>("/" + robot_name + nh_.resolveName("svc/set_safety_area"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/set_safety_area\' -> \'%s\'", robot_handler.sc_set_safety_area.getService().c_str());
@@ -947,6 +960,7 @@ ros::ServiceClient* IROCBridge::getServiceClient(IROCBridge::robot_handler_t* rh
     case CommandType::Land: return &(rh_ptr->sc_land);
     case CommandType::Hover: return &(rh_ptr->sc_hover);
     case CommandType::Home: return &(rh_ptr->sc_land_home);
+    case CommandType::Set_Origin: return &(rh_ptr->sc_set_origin);
     case CommandType::Set_SafetyBorder: return &(rh_ptr->sc_set_safety_area);
     case CommandType::Set_Obstacle: return &(rh_ptr->sc_set_obstacle);
     default: return nullptr;
@@ -1189,6 +1203,56 @@ crow::response IROCBridge::pathCallback(const crow::request& req)
 }
 //}
 
+/* setOriginCallback() method //{ */
+
+/**
+ * \brief Callback for the set safety border request. It receives a list of points and sends them to the fleet manager.
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::setOriginCallback(const crow::request& req)
+{
+  if (active_border_callback_)
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Another safety border callback is already active.\"}");
+
+  ROS_INFO_STREAM("[IROCBridge]: Parsing a setOriginCallback message JSON -> ROS.");
+
+  crow::json::rvalue json_msg = crow::json::load(req.body);
+  if (!json_msg) {
+    ROS_WARN_STREAM("[IROCBridge]: Bad json input: " << req.body);
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad json input: " + req.body + "\"}");
+  }
+
+  bool enabled = true;  // Defined default as true
+                        
+  // Get message properties
+  int frame_id                       = json_msg["frame_id"].i();
+
+  // The service supports latlon and UTM, but we we can at the moment support only latlon for IROC
+  // TODO: It can be extended in the future to support UTM origin 
+  mrs_msgs::ReferenceStampedSrv::Request service_request;
+  service_request.header.frame_id      = "latlon_origin"; 
+  service_request.header.stamp         = ros::Time::now();
+  service_request.reference.position.x = json_msg["x"].d();
+  service_request.reference.position.y = json_msg["y"].d();
+
+  std::scoped_lock lck(robot_handlers_.mtx);
+
+  std::vector<std::string> robot_names;
+  robot_names.reserve(robot_handlers_.handlers.size());
+  for (const auto& rh : robot_handlers_.handlers)
+    robot_names.push_back(rh.robot_name);
+
+  // check that all robot names are valid and find the corresponding robot handlers
+
+  const auto result = commandAction<mrs_msgs::ReferenceStampedSrv>(robot_names, "set_origin" , service_request);
+  active_border_callback_ = false;
+
+  return crow::response(result.status_code, result.message);
+}
+//}
+
 /* setSafetyBorderCallback() method //{ */
 
 /**
@@ -1284,20 +1348,18 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
  */
 crow::response IROCBridge::setObstacleCallback(const crow::request& req)
 {
-  if (active_border_callback_)
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Another safety border callback is already active.\"}");
 
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
 
   crow::json::rvalue json_msg = crow::json::load(req.body);
   if (!json_msg)
-    return crow::response(crow::status::BAD_REQUEST, "Failed to parse JSON or missing 'points' key: " + req.body);
+    return crow::response(crow::status::BAD_REQUEST, "Failed to parse JSON" + req.body);
 
   // Get message properties
-  int height_id                          = json_msg["height_id"].i();
-  int max_z                              = json_msg["max_z"].i();
-  int min_z                              = json_msg["min_z"].i();
-  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
+  int height_id                              = json_msg["height_id"].i();
+  int max_z                                  = json_msg["max_z"].i();
+  int min_z                                  = json_msg["min_z"].i();
+  std::vector<crow::json::rvalue> points     = json_msg["points"].lo();
 
   std::string horizontal_frame = "latlon_origin";
   std::string vertical_frame;
