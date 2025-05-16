@@ -350,25 +350,25 @@ void IROCBridge::onInit() {
 
   // Server
   // Do we need this (set_path)?
-  CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::pathCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return pathCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/origin").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setOriginCallback(req); });
-  CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setSafetyBorderCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::setObstacleCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/mission/waypoints").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::waypointMissionCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/mission/coverage").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::coverageMissionCallback, this, std::placeholders::_1));
-  CROW_ROUTE(http_srv_, "/mission/autonomy-test").methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::autonomyTestCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setSafetyBorderCallback(req); });
+  CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setObstacleCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission/waypoints").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return waypointMissionCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission/coverage").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return coverageMissionCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission/autonomy-test").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return autonomyTestCallback(req); });
 
   // Missions
   //TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
   CROW_ROUTE(http_srv_, "/mission/<string>")
-      .methods(crow::HTTPMethod::Post)(std::bind(&IROCBridge::changeFleetMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2));
+      .methods(crow::HTTPMethod::Post)([this](const crow::request& req, const std::string& type){ return changeFleetMissionStateCallback(req, type); });
   //TODO: CROW_REGEX_ROUTE(http_srv_, R"(/robots/(\w+)/mission/(start|stop|pause))")
   CROW_ROUTE(http_srv_, "/robots/<string>/mission/<string>")
       .methods(crow::HTTPMethod::Post)(
-          std::bind(&IROCBridge::changeRobotMissionStateCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+          [this](const crow::request& req, const std::string& robot_name, const std::string& type){ return changeRobotMissionStateCallback(req, robot_name, type); });
 
   // Available robots endpoint
-  CROW_ROUTE(http_srv_, "/robots").methods(crow::HTTPMethod::Get)(std::bind(&IROCBridge::availableRobotsCallback, this, std::placeholders::_1));
+  CROW_ROUTE(http_srv_, "/robots").methods(crow::HTTPMethod::Get)([this](const crow::request& req){ return availableRobotsCallback(req); });
 
   // Command endpoints with robot name in the path (land, takeoff, hover, home) 
   CROW_ROUTE(http_srv_, "/robots/<string>/<string>").methods(crow::HTTPMethod::Post)
@@ -392,7 +392,7 @@ void IROCBridge::onInit() {
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << conn.get_remote_ip() << " closed: " << reason);
         ROS_INFO_STREAM("[IROCBridge]: Websocket connection " << &conn << " closed: " << reason);
       })
-      .onmessage(std::bind(&IROCBridge::remoteControlCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+      .onmessage([this](crow::websocket::connection& conn, const std::string& data, bool is_binary) { return remoteControlCallback(conn, data, is_binary); });
 
   // Telemetry websocket
   CROW_WEBSOCKET_ROUTE(http_srv_, "/telemetry")
@@ -1213,8 +1213,6 @@ crow::response IROCBridge::pathCallback(const crow::request& req)
  */
 crow::response IROCBridge::setOriginCallback(const crow::request& req)
 {
-  if (active_border_callback_)
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Another safety border callback is already active.\"}");
 
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setOriginCallback message JSON -> ROS.");
 
@@ -1247,7 +1245,6 @@ crow::response IROCBridge::setOriginCallback(const crow::request& req)
   // check that all robot names are valid and find the corresponding robot handlers
 
   const auto result = commandAction<mrs_msgs::ReferenceStampedSrv>(robot_names, "set_origin" , service_request);
-  active_border_callback_ = false;
 
   return crow::response(result.status_code, result.message);
 }
@@ -1520,13 +1517,13 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
     action_client_ptr_->sendGoal(
         action_goal,
         [this](const auto& state, const auto& result) {
-          this->missionDoneCallback<iroc_fleet_manager::WaypointFleetManagerResult>(state, result);
+          missionDoneCallback<iroc_fleet_manager::WaypointFleetManagerResult>(state, result);
         },
         [this]() {
-          this->missionActiveCallback();
+          missionActiveCallback();
         },
         [this](const auto& feedback) {
-          this->missionFeedbackCallback<iroc_fleet_manager::WaypointFleetManagerFeedback>(feedback);
+          missionFeedbackCallback<iroc_fleet_manager::WaypointFleetManagerFeedback>(feedback);
         }
     );
 
@@ -1650,13 +1647,13 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     coverage_action_client_ptr_->sendGoal(
         action_goal,
         [this](const auto& state, const auto& result) {
-          this->missionDoneCallback<iroc_fleet_manager::CoverageMissionResult>(state, result);
+          missionDoneCallback<iroc_fleet_manager::CoverageMissionResult>(state, result);
         },
         [this]() {
-          this->missionActiveCallback();
+          missionActiveCallback();
         },
         [this](const auto& feedback) {
-          this->missionFeedbackCallback<iroc_fleet_manager::CoverageMissionFeedback>(feedback);
+          missionFeedbackCallback<iroc_fleet_manager::CoverageMissionFeedback>(feedback);
         }
     );
 
@@ -1761,13 +1758,13 @@ crow::response IROCBridge::autonomyTestCallback(const crow::request& req)
   autonomy_test_client_ptr_->sendGoal(
         action_goal,
         [this](const auto& state, const auto& result) {
-          this->missionDoneCallback<iroc_fleet_manager::AutonomyTestResult>(state, result);
+          missionDoneCallback<iroc_fleet_manager::AutonomyTestResult>(state, result);
         },
         [this]() {
-          this->missionActiveCallback();
+          missionActiveCallback();
         },
         [this](const auto& feedback) {
-          this->missionFeedbackCallback<iroc_fleet_manager::AutonomyTestFeedback>(feedback);
+          missionFeedbackCallback<iroc_fleet_manager::AutonomyTestFeedback>(feedback);
         }
     );
 
