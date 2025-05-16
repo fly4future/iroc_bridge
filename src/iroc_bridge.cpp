@@ -274,6 +274,9 @@ private:
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
   std::unique_ptr<CoveragePlannerClient>      coverage_action_client_ptr_;
   std::unique_ptr<AutonomyTestClient>         autonomy_test_client_ptr_;
+
+  // Latlon origin
+  mrs_msgs::Point2D  world_origin_;
 };
 //}
 
@@ -1222,8 +1225,6 @@ crow::response IROCBridge::setOriginCallback(const crow::request& req)
     return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad json input: " + req.body + "\"}");
   }
 
-  bool enabled = true;  // Defined default as true
-                        
   // Get message properties
   int frame_id                       = json_msg["frame_id"].i();
 
@@ -1245,6 +1246,12 @@ crow::response IROCBridge::setOriginCallback(const crow::request& req)
   // check that all robot names are valid and find the corresponding robot handlers
 
   const auto result = commandAction<mrs_msgs::ReferenceStampedSrv>(robot_names, "set_origin" , service_request);
+
+  if (result.success) {
+    ROS_INFO_STREAM("[IROCBridge]: Set origin for " << robot_names.size() << " robots.");
+    world_origin_.x = json_msg["x"].d();  
+    world_origin_.y = json_msg["y"].d();
+  }
 
   return crow::response(result.status_code, result.message);
 }
@@ -1641,8 +1648,15 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
     // Send the action goal to the fleet manager
     coverageMissionActionServerGoal action_goal;
 
-    action_goal.mission.robots      = mission_robots; 
-    action_goal.mission.search_area = polygon_points;
+    if (world_origin_.x == 0.0 && world_origin_.y == 0.0) {
+      ROS_WARN_STREAM("[IROCBridge]: World origin is not set.");
+      std::string msg = "World origin is not set.";
+      return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
+    }
+
+    action_goal.mission.latlon_origin = world_origin_;
+    action_goal.mission.robots        = mission_robots; 
+    action_goal.mission.search_area   = polygon_points;
 
     coverage_action_client_ptr_->sendGoal(
         action_goal,
