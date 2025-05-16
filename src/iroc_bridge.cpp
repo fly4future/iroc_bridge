@@ -989,7 +989,7 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   bool              everything_ok = true;
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
-  ss << "Result:\n";
+  ss << "Command: " << command_type << " Result: ";
 
   CommandType command_type_e = CommandType::Unknown;
   auto it = command_type_map_.find(command_type);
@@ -1030,6 +1030,7 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     }
   }
 
+  ss << "Successully processed\n";
   return {everything_ok, ss.str(), status_code};
 }
 
@@ -1040,7 +1041,7 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   bool              everything_ok = true;
   std::stringstream ss;
   crow::status      status_code = crow::status::ACCEPTED; 
-  ss << "Result:\n";
+  ss << "Command: " << command_type << " Result: ";
 
   CommandType command_type_e = CommandType::Unknown;
   auto it = command_type_map_.find(command_type);
@@ -1080,6 +1081,7 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
       status_code = crow::status::NOT_FOUND;
     }
   }
+  ss << "Successully processed\n";
 
   return {everything_ok, ss.str(), status_code};
 }
