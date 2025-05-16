@@ -60,7 +60,40 @@ Endpoints for controlling the robots.
 
 ### Environment setup
 
-Endpoints for controlling the robot environment.
+Endpoints for controlling the robot's environment.
+ > **NOTE** \
+  > Each step in this sequence depends on the successful completion of the previous step. Please ensure that you first initialize the origin, then the borders, and finally the obstacles, in that exact order.
+> 
+<figure align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="img/environment_sequence_dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="img/environment_sequence_bright.svg" />
+    <img src="img/environment_sequence_bright.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;"> 
+  </picture>
+  <figcaption>Environment setup sequence diagram</figcaption>
+</figure>
+
+- <strong style="color: #49cc90">`POST`</strong>
+  **/safety-area/origin**  
+  <span style="color: gray">
+  Set the world origin.
+  </span>
+  <details> 
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+   
+  We currently only support `frame_id` in LATLON (`id`: 0) 
+   
+  ```json
+  {
+  "frame_id": 0, 
+  "x": 47.397978,
+  "y": 8.545299 
+  }
+  ```
+
+  </details>
 
 - <strong style="color: #49cc90">`POST`</strong>
   **/safety-area/borders**  
