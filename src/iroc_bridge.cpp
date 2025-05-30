@@ -60,7 +60,7 @@
 #include <iroc_fleet_manager/WaypointMissionRobot.h>
 #include <iroc_fleet_manager/WaypointMissionInfo.h>
 
-#include <iroc_mission_handler/waypointMissionGoal.h>
+#include <iroc_mission_handler/MissionGoal.h>
 
 #include <unistd.h>
 #include <iostream>
@@ -1614,7 +1614,7 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
       mission_robot.local_position.x       = robot_local_pose.position.x;
       mission_robot.local_position.y       = robot_local_pose.position.y;
       mission_robot.local_position.z       = robot_local_pose.position.z;
-      mission_robot.frame_id               = iroc_mission_handler::waypointMissionGoal::FRAME_ID_LATLON;
+      mission_robot.frame_id               = iroc_mission_handler::MissionGoal::FRAME_ID_LATLON;
       mission_robot.height_id              = height_id;
       mission_robot.height                 = height;
       mission_robot.terminal_action        = terminal_action;
