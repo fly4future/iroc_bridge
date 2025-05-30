@@ -1443,7 +1443,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
       return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'mission' key\"}");
 
     // Iterate over each robot in the mission
-    std::vector<iroc_fleet_manager::WaypointMissionRobot> mission_robots;
+    std::vector<iroc_mission_handler::MissionRobotGoal> mission_robots;
     for (const auto& mission_json : json_msg["mission"].lo()) {
       std::scoped_lock lck(robot_handlers_.mtx);
 
@@ -1455,7 +1455,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
       }
 
       // Process the action request for each robot
-      iroc_fleet_manager::WaypointMissionRobot mission_robot;
+      iroc_mission_handler::MissionRobotGoal mission_robot;
       mission_robot.name            = robot_name;
       mission_robot.frame_id        = mission_json["frame_id"].i();
       mission_robot.height_id       = mission_json["height_id"].i();
