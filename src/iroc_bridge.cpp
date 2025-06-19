@@ -269,8 +269,6 @@ private:
   crow::websocket::connection*           active_telemetry_connection_ = nullptr;
   std::mutex mtx_telemetry_connections_;
   
-  bool active_border_callback_;
-
   std::unique_ptr<WaypointFleetManagerClient> action_client_ptr_;
   std::unique_ptr<CoveragePlannerClient>      coverage_action_client_ptr_;
   std::unique_ptr<AutonomyTestClient>         autonomy_test_client_ptr_;
@@ -1269,9 +1267,6 @@ crow::response IROCBridge::setOriginCallback(const crow::request& req)
  */
 crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
 {
-  if (active_border_callback_)
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Another safety border callback is already active.\"}");
-
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setSafetyBorderCallback message JSON -> ROS.");
 
   crow::json::rvalue json_msg = crow::json::load(req.body);
@@ -1338,7 +1333,6 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req)
   mrs_msgs::SetSafetyBorderSrv::Request req_srv = service_request;
 
   const auto result = commandAction<mrs_msgs::SetSafetyBorderSrv>(robot_names, "set_safety_border" , req_srv);
-  active_border_callback_ = false;
 
   return crow::response(result.status_code, result.message);
 }
