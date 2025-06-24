@@ -57,10 +57,8 @@
 #include <iroc_fleet_manager/CoverageMissionAction.h>
 #include <iroc_fleet_manager/CoverageMissionRobot.h>
 #include <iroc_fleet_manager/AutonomyTestAction.h>
-#include <iroc_fleet_manager/WaypointMissionRobot.h>
-#include <iroc_fleet_manager/WaypointMissionInfo.h>
 
-#include <iroc_mission_handler/waypointMissionGoal.h>
+#include <iroc_mission_handler/MissionAction.h>
 
 #include <unistd.h>
 #include <iostream>
@@ -605,13 +603,13 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
       ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     }
 
-    json robots_results = json::list(); 
+    json robot_results = json::list(); 
 
-    for (size_t i = 0; i < result->robots_results.size(); i++) {
-      robots_results[i] = {
-        {"robot_name", result->robots_results[i].name},
-        {"success", static_cast<bool>(result->robots_results[i].success)}, 
-        {"message", result->robots_results[i].message} 
+    for (size_t i = 0; i < result->robot_results.size(); i++) {
+      robot_results[i] = {
+        {"robot_name", result->robot_results[i].name},
+        {"success", static_cast<bool>(result->robot_results[i].success)}, 
+        {"message", result->robot_results[i].message} 
       };
     }
 
@@ -619,7 +617,7 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
     json json_msg = {
       {"success", static_cast<bool>(result->success)},
       {"message", result->message},
-      {"robot_results", robots_results} 
+      {"robot_results", robot_results} 
     };
 
     sendJsonMessage("results", json_msg);
@@ -630,14 +628,14 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
 /* missionFeedbackCallback //{ */
 template <typename Feedback>
  void IROCBridge::missionFeedbackCallback(const boost::shared_ptr<const Feedback>& feedback) {
-  auto robots_feedback = feedback->info.robots_feedback;
+  auto robot_feedbacks = feedback->info.robot_feedbacks;
   
   // Create a list for robot feedback
   json json_msgs = json::list();
 
   // Collect each robot feedback and create a json for each
-  for (size_t i = 0; i < robots_feedback.size(); i++) {
-    const auto& rfb = robots_feedback[i];
+  for (size_t i = 0; i < robot_feedbacks.size(); i++) {
+    const auto& rfb = robot_feedbacks[i];
     
     json robot_json = {
         {"robot_name", rfb.name},
@@ -1089,13 +1087,13 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
 template <typename Result>
 json resultToJson(const boost::shared_ptr<const Result>& result) {
-  json robots_results = json::list(); 
+  json robot_results = json::list(); 
 
-  for (size_t i = 0; i < result->robots_results.size(); i++) {
-    robots_results[i] = {
-      {"robot_name", result->robots_results[i].name},
-      {"success", static_cast<bool>(result->robots_results[i].success)}, 
-      {"message", result->robots_results[i].message} 
+  for (size_t i = 0; i < result->robot_results.size(); i++) {
+    robot_results[i] = {
+      {"robot_name", result->robot_results[i].name},
+      {"success", static_cast<bool>(result->robot_results[i].success)}, 
+      {"message", result->robot_results[i].message} 
     };
   }
 
@@ -1103,7 +1101,7 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
   json json_msg = {
     {"success", static_cast<bool>(result->success)},
     {"message", result->message},
-    {"robot_results", robots_results} 
+    {"robot_results", robot_results} 
   };
 
   return json_msg;
@@ -1114,10 +1112,10 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
 
 template <typename MissionRobot>
 json successMissionJson(std::vector<MissionRobot> mission_robots) {
-  json robots_results = json::list(); 
+  json robot_results = json::list(); 
 
   for (size_t i = 0; i < mission_robots.size(); i++) {
-    robots_results[i] = {
+    robot_results[i] = {
       {"robot_name", mission_robots[i].name},
       {"success", true }, 
       {"message", "Robot received the mission successfully"} 
@@ -1128,7 +1126,7 @@ json successMissionJson(std::vector<MissionRobot> mission_robots) {
   json json_msg = {
     {"success", true},
     {"message", "Mission uploaded successfully"},
-    {"robot_results", robots_results} 
+    {"robot_results", robot_results} 
   };
 
   return json_msg;
@@ -1437,7 +1435,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
       return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'mission' key\"}");
 
     // Iterate over each robot in the mission
-    std::vector<iroc_fleet_manager::WaypointMissionRobot> mission_robots;
+    std::vector<iroc_mission_handler::MissionGoal> mission_robots;
     for (const auto& mission_json : json_msg["mission"].lo()) {
       std::scoped_lock lck(robot_handlers_.mtx);
 
@@ -1449,7 +1447,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
       }
 
       // Process the action request for each robot
-      iroc_fleet_manager::WaypointMissionRobot mission_robot;
+      iroc_mission_handler::MissionGoal mission_robot;
       mission_robot.name            = robot_name;
       mission_robot.frame_id        = mission_json["frame_id"].i();
       mission_robot.height_id       = mission_json["height_id"].i();
@@ -1608,7 +1606,7 @@ crow::response IROCBridge::coverageMissionCallback(const crow::request& req)
       mission_robot.local_position.x       = robot_local_pose.position.x;
       mission_robot.local_position.y       = robot_local_pose.position.y;
       mission_robot.local_position.z       = robot_local_pose.position.z;
-      mission_robot.frame_id               = iroc_mission_handler::waypointMissionGoal::FRAME_ID_LATLON;
+      mission_robot.frame_id               = iroc_mission_handler::MissionGoal::FRAME_ID_LATLON;
       mission_robot.height_id              = height_id;
       mission_robot.height                 = height;
       mission_robot.terminal_action        = terminal_action;
