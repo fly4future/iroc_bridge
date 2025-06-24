@@ -605,13 +605,13 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
       ROS_INFO_STREAM("[IROCBridge]: Mission Action server finished with state: \"" << state.toString() << "\"");
     }
 
-    json robots_results = json::list(); 
+    json robot_results = json::list(); 
 
-    for (size_t i = 0; i < result->robots_results.size(); i++) {
-      robots_results[i] = {
-        {"robot_name", result->robots_results[i].name},
-        {"success", static_cast<bool>(result->robots_results[i].success)}, 
-        {"message", result->robots_results[i].message} 
+    for (size_t i = 0; i < result->robot_results.size(); i++) {
+      robot_results[i] = {
+        {"robot_name", result->robot_results[i].name},
+        {"success", static_cast<bool>(result->robot_results[i].success)}, 
+        {"message", result->robot_results[i].message} 
       };
     }
 
@@ -619,7 +619,7 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
     json json_msg = {
       {"success", static_cast<bool>(result->success)},
       {"message", result->message},
-      {"robot_results", robots_results} 
+      {"robot_results", robot_results} 
     };
 
     sendJsonMessage("results", json_msg);
@@ -630,14 +630,14 @@ void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const b
 /* missionFeedbackCallback //{ */
 template <typename Feedback>
  void IROCBridge::missionFeedbackCallback(const boost::shared_ptr<const Feedback>& feedback) {
-  auto robots_feedback = feedback->info.robots_feedback;
+  auto robot_feedbacks = feedback->info.robot_feedbacks;
   
   // Create a list for robot feedback
   json json_msgs = json::list();
 
   // Collect each robot feedback and create a json for each
-  for (size_t i = 0; i < robots_feedback.size(); i++) {
-    const auto& rfb = robots_feedback[i];
+  for (size_t i = 0; i < robot_feedbacks.size(); i++) {
+    const auto& rfb = robot_feedbacks[i];
     
     json robot_json = {
         {"robot_name", rfb.name},
@@ -1089,13 +1089,13 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
 template <typename Result>
 json resultToJson(const boost::shared_ptr<const Result>& result) {
-  json robots_results = json::list(); 
+  json robot_results = json::list(); 
 
-  for (size_t i = 0; i < result->robots_results.size(); i++) {
-    robots_results[i] = {
-      {"robot_name", result->robots_results[i].name},
-      {"success", static_cast<bool>(result->robots_results[i].success)}, 
-      {"message", result->robots_results[i].message} 
+  for (size_t i = 0; i < result->robot_results.size(); i++) {
+    robot_results[i] = {
+      {"robot_name", result->robot_results[i].name},
+      {"success", static_cast<bool>(result->robot_results[i].success)}, 
+      {"message", result->robot_results[i].message} 
     };
   }
 
@@ -1103,7 +1103,7 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
   json json_msg = {
     {"success", static_cast<bool>(result->success)},
     {"message", result->message},
-    {"robot_results", robots_results} 
+    {"robot_results", robot_results} 
   };
 
   return json_msg;
@@ -1114,10 +1114,10 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
 
 template <typename MissionRobot>
 json successMissionJson(std::vector<MissionRobot> mission_robots) {
-  json robots_results = json::list(); 
+  json robot_results = json::list(); 
 
   for (size_t i = 0; i < mission_robots.size(); i++) {
-    robots_results[i] = {
+    robot_results[i] = {
       {"robot_name", mission_robots[i].name},
       {"success", true }, 
       {"message", "Robot received the mission successfully"} 
@@ -1128,7 +1128,7 @@ json successMissionJson(std::vector<MissionRobot> mission_robots) {
   json json_msg = {
     {"success", true},
     {"message", "Mission uploaded successfully"},
-    {"robot_results", robots_results} 
+    {"robot_results", robot_results} 
   };
 
   return json_msg;
