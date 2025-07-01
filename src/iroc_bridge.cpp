@@ -1488,6 +1488,18 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
 
         iroc_mission_handler::Waypoint waypoint;
         waypoint.reference_point = ref;
+        if (point.has("subtasks")) {
+          std::vector<iroc_mission_handler::Subtask> subtasks;
+          for (const auto& subtask : point["subtasks"].lo()) {
+            iroc_mission_handler::Subtask subtask_obj;
+            subtask_obj.type = subtask["type"].i();
+            if (subtask.has("parameters")) {
+              subtask_obj.parameters = subtask["params"].s();
+            }
+            subtasks.push_back(subtask_obj);
+          }
+          waypoint.subtasks = subtasks;
+        }
         ref_points.push_back(waypoint);
       }
       mission_robot.points = ref_points;
