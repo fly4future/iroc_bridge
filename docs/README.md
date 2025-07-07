@@ -270,6 +270,81 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   ```
 
   </details>
+#### Mission Response Examples
+
+1. Successful mission upload
+<details>
+ 
+  <summary>
+  <em>Body</em> <span style="color: gray"> example response (json)</span>
+  </summary>
+Code: **201 Created**
+
+```json
+{
+   "message":"Mission uploaded successfully",
+   "success":true,
+   "robot_results":[
+      {
+         "robot_name":"uav1",
+         "success":true,
+         "message":"Robot received the mission successfully"
+      },
+      {
+         "message":"Robot received the mission successfully",
+         "success":true,
+         "robot_name":"uav2"
+      }
+   ]
+}
+```
+ 
+</details>
+
+2. Uploading mission failure due to safety area validation.
+<details>
+ 
+  <summary>
+  <em>Body</em> <span style="color: gray"> example response (json)</span>
+  </summary>
+Code: **400 Bad Request**
+
+```json
+{
+   "message":"Failure starting robot clients.",
+   "success":false,
+   "robot_results":[
+      {
+         "robot_name":"uav1",
+         "success":true,
+         "message":"Mission on robot: uav1 was successfully processed"
+      },
+      {
+         "message":"Unvalid trajectory for uav2, trajectory is outside of safety area",
+         "success":false,
+         "robot_name":"uav2"
+      }
+   ]
+}
+```
+ 
+</details>
+
+3. Uploading mission failure due to loaded mission in server.
+<details>
+ 
+  <summary>
+  <em>Body</em> <span style="color: gray"> example response (json)</span>
+  </summary>
+Code: **409 Conflict**
+
+```json
+{
+  "message": "Mission is already running. Terminate the previous one, or wait until it is finished"
+}
+```
+ 
+</details>
 
 #### Mission Control Endpoints
 
