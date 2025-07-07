@@ -278,7 +278,9 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   <summary>
   <em>Body</em> <span style="color: gray"> example response (json)</span>
   </summary>
-Code: **201 Created**
+- Code: 201 Created
+
+- Example value:
 
 ```json
 {
@@ -307,7 +309,9 @@ Code: **201 Created**
   <summary>
   <em>Body</em> <span style="color: gray"> example response (json)</span>
   </summary>
-Code: **400 Bad Request**
+- Code: 400 Bad Request
+
+- Example value:
 
 ```json
 {
@@ -336,7 +340,9 @@ Code: **400 Bad Request**
   <summary>
   <em>Body</em> <span style="color: gray"> example response (json)</span>
   </summary>
-Code: **409 Conflict**
+- Code: 409 Conflict
+
+- Example value:
 
 ```json
 {
