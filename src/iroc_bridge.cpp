@@ -1812,8 +1812,13 @@ crow::response IROCBridge::changeFleetMissionStateCallback(const crow::request& 
 
   ros::ServiceClient service_client;
   auto it = change_type_map_.find(latest_mission_type_);
-  if (it != change_type_map_.end()) 
-    service_client = getServiceClient(it->second); 
+  if (it != change_type_map_.end()) {
+    service_client = getServiceClient(it->second);
+  } else {
+    std::string msg = "No active mission.";
+    return crow::response(crow::status::BAD_REQUEST,
+                          "{\"message\": \"" + msg + "\"}");
+  }
 
   const auto resp = callService<mrs_msgs::String>(service_client, ros_srv.request);
   if (!resp.success)
@@ -1838,7 +1843,11 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
   // Input validation
   if (type != "start" && type != "stop" && type != "pause")
     return crow::response(crow::status::NOT_FOUND);
-  if (!std::any_of(robot_handlers_.handlers.begin(), robot_handlers_.handlers.end(), [&robot_name](const auto& rh) { return rh.robot_name == robot_name; }))
+  if (!std::any_of(robot_handlers_.handlers.begin(),
+                   robot_handlers_.handlers.end(),
+                   [&robot_name](const auto &rh) {
+                     return rh.robot_name == robot_name;
+                   }))
     return crow::response(crow::status::NOT_FOUND, "Robot not found");
 
   json json_msg;
@@ -1849,8 +1858,13 @@ crow::response IROCBridge::changeRobotMissionStateCallback(const crow::request& 
 
   ros::ServiceClient service_client;
   auto it = change_robot_type_map_.find(latest_mission_type_);
-  if (it != change_robot_type_map_.end()) 
-    service_client = getServiceClient(it->second); 
+  if (it != change_robot_type_map_.end()) {
+    service_client = getServiceClient(it->second);
+  } else {
+    std::string msg = "No active mission.";
+    return crow::response(crow::status::BAD_REQUEST,
+                          "{\"message\": \"" + msg + "\"}");
+  }
 
   const auto resp = callService<iroc_fleet_manager::ChangeRobotMissionStateSrv>(service_client, ros_srv.request);
   if (!resp.success) {
