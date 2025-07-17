@@ -648,6 +648,16 @@ template <typename Feedback>
         {"distance_to_finish", rfb.distance_to_finish},
         {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
     };
+
+    ROS_DEBUG_STREAM("[IROCBridge]: Mission feedback for robot: " << rfb.name
+        << ", message: " << rfb.message
+        << ", progress: " << rfb.mission_progress
+        << ", current goal: " << rfb.goal_idx
+        << ", distance to goal: " << rfb.distance_to_closest_goal
+        << ", goal estimated arrival time: " << rfb.goal_estimated_arrival_time
+        << ", goal progress: " << rfb.goal_progress
+        << ", distance to finish: " << rfb.distance_to_finish
+        << ", finish estimated arrival time: " << rfb.finish_estimated_arrival_time);
     
     // Add to the list at index i
     json_msgs[i] = std::move(robot_json);
@@ -1494,7 +1504,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
             iroc_mission_handler::Subtask subtask_obj;
             subtask_obj.type = subtask["type"].i();
             if (subtask.has("parameters")) {
-              subtask_obj.parameters = subtask["params"].s();
+              subtask_obj.parameters = subtask["parameters"].s();
             }
             subtasks.push_back(subtask_obj);
           }
