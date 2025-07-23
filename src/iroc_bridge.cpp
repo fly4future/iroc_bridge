@@ -648,6 +648,16 @@ template <typename Feedback>
         {"distance_to_finish", rfb.distance_to_finish},
         {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}
     };
+
+    ROS_DEBUG_STREAM("[IROCBridge]: Mission feedback for robot: " << rfb.name
+        << ", message: " << rfb.message
+        << ", progress: " << rfb.mission_progress
+        << ", current goal: " << rfb.goal_idx
+        << ", distance to goal: " << rfb.distance_to_closest_goal
+        << ", goal estimated arrival time: " << rfb.goal_estimated_arrival_time
+        << ", goal progress: " << rfb.goal_progress
+        << ", distance to finish: " << rfb.distance_to_finish
+        << ", finish estimated arrival time: " << rfb.finish_estimated_arrival_time);
     
     // Add to the list at index i
     json_msgs[i] = std::move(robot_json);
@@ -1476,7 +1486,7 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
       // Process the points in the mission
       std::vector<crow::json::rvalue> points = mission_json["points"].lo();
       
-      std::vector<mrs_msgs::Reference> ref_points;
+      std::vector<iroc_mission_handler::Waypoint> ref_points;
       ref_points.reserve(points.size());
       for (const auto& point : points) {
         mrs_msgs::Reference ref;
@@ -1486,13 +1496,27 @@ crow::response IROCBridge::waypointMissionCallback(const crow::request& req)
           ref.position.z = point["z"].d();
         ref.heading = point["heading"].d();
 
-        ref_points.push_back(ref);
+        iroc_mission_handler::Waypoint waypoint;
+        waypoint.reference_point = ref;
+        if (point.has("subtasks")) {
+          std::vector<iroc_mission_handler::Subtask> subtasks;
+          for (const auto& subtask : point["subtasks"].lo()) {
+            iroc_mission_handler::Subtask subtask_obj;
+            subtask_obj.type = subtask["type"].i();
+            if (subtask.has("parameters")) {
+              subtask_obj.parameters = subtask["parameters"].s();
+            }
+            subtasks.push_back(subtask_obj);
+          }
+          waypoint.subtasks = subtasks;
+        }
+        ref_points.push_back(waypoint);
       }
       mission_robot.points = ref_points;
       
       // Debugging/logging
       for (const auto& point : ref_points) {
-        ROS_INFO_STREAM("[IROCBridge]: Robot " << robot_name << " point: " << point.position.x << ", " << point.position.y << ", " << point.position.z);
+        ROS_INFO_STREAM("[IROCBridge]: Robot " << robot_name << " point: " << point.reference_point.position.x << ", " << point.reference_point.position.y << ", " << point.reference_point.position.z);
       }
 
       // Add the mission to the list of missions
