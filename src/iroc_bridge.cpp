@@ -76,17 +76,8 @@ using vec4_t = Eigen::Vector4d;
 using namespace actionlib;
 
 using FleetManagerActionClient = SimpleActionClient<iroc_fleet_manager::FleetManagerAction>;
-
-typedef SimpleActionClient<iroc_fleet_manager::WaypointFleetManagerAction> WaypointFleetManagerClient;
-typedef SimpleActionClient<iroc_fleet_manager::CoverageMissionAction> CoveragePlannerClient;
-typedef SimpleActionClient<iroc_fleet_manager::AutonomyTestAction> AutonomyTestClient;
 //Waypoint mission goal
 typedef iroc_fleet_manager::FleetManagerGoal FleetManagerGoal;
-// Autonomy test goal
-typedef iroc_fleet_manager::AutonomyTestGoal AutonomyTestActionServerGoal;
-// Coverage mission goal 
-typedef iroc_fleet_manager::CoverageMissionGoal coverageMissionActionServerGoal;
-
 typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
 
 /* class IROCBridge //{ */
@@ -201,9 +192,6 @@ private:
   // | ----------------------- ROS Clients ----------------------- |
   ros::ServiceClient sc_change_fleet_mission_state;
   ros::ServiceClient sc_change_robot_mission_state;
-  ros::ServiceClient sc_change_coverage_mission_state;
-  ros::ServiceClient sc_change_coverage_mission_robot_state;
-  ros::ServiceClient sc_change_autonomy_test_state;
   std::string        latest_mission_type_;
 
   // | ----------------- action client callbacks ---------------- |
@@ -242,9 +230,7 @@ private:
   crow::response setOriginCallback(const crow::request& req);
   crow::response setSafetyBorderCallback(const crow::request& req);
   crow::response setObstacleCallback(const crow::request& req);
-  crow::response missionCallback(const crow::request& req, const std::string& type);
-  crow::response coveragemissionCallback(const crow::request& req);
-  crow::response autonomyTestCallback(const crow::request& req);
+  crow::response missionCallback(const crow::request& req);
 
   crow::response changeFleetMissionStateCallback(const crow::request& req, const std::string& type);
   crow::response changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name, const std::string& type);
@@ -354,7 +340,7 @@ void IROCBridge::onInit() {
   CROW_ROUTE(http_srv_, "/safety-area/origin").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return setObstacleCallback(req); });
-  CROW_ROUTE(http_srv_, "/mission/create/<string>").methods(crow::HTTPMethod::Post)([this](const crow::request& req, const std::string& type){ return missionCallback(req, type); });
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Post)([this](const crow::request& req){ return missionCallback(req); });
 
   // Missions
   //TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
@@ -492,18 +478,6 @@ void IROCBridge::onInit() {
   sc_change_robot_mission_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_robot_mission_state"));
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
            sc_change_robot_mission_state.getService().c_str());
-
-  sc_change_coverage_mission_state = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_coverage_mission_state"));
-  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_coverage_mission_state\' -> \'%s\'",
-           sc_change_coverage_mission_state.getService().c_str());
-
-  sc_change_coverage_mission_robot_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_coverage_mission_robot_state"));
-  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
-           sc_change_coverage_mission_state.getService().c_str());
-
-  sc_change_autonomy_test_state = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_autonomy_test_state"));
-  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_autonomy_test_state\' -> \'%s\'",
-           sc_change_autonomy_test_state.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
 
@@ -968,9 +942,6 @@ ros::ServiceClient IROCBridge::getServiceClient(const IROCBridge::Change_SvC_T s
   switch (service_type) {
     case Change_SvC_T::FleetWaypoint: return sc_change_fleet_mission_state;
     case Change_SvC_T::RobotWaypoint: return sc_change_robot_mission_state;
-    case Change_SvC_T::FleetCoverage: return sc_change_coverage_mission_state;
-    case Change_SvC_T::RobotCoverage: return sc_change_coverage_mission_robot_state;
-    case Change_SvC_T::RobotAutonomyTest: return sc_change_autonomy_test_state;
     default: return ros::ServiceClient();
   }
 }
@@ -1108,23 +1079,13 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
 
 /* successMissionJson() method //{ */
 
-template <typename MissionRobot>
-json successMissionJson(std::vector<MissionRobot> mission_robots) {
-  json robot_results = json::list(); 
-
-  for (size_t i = 0; i < mission_robots.size(); i++) {
-    robot_results[i] = {
-      {"robot_name", mission_robots[i].name},
-      {"success", true }, 
-      {"message", "Robot received the mission successfully"} 
-    };
-  }
+json successMissionJson() {
 
   // Create the main JSON object
   json json_msg = {
     {"success", true},
     {"message", "Mission uploaded successfully"},
-    {"robot_results", robot_results} 
+    {"robot_results", "All robots received their mission"} 
   };
 
   return json_msg;
@@ -1422,95 +1383,16 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req)
  * \param req Crow request
  * \return res Crow response
  */
-crow::response IROCBridge::missionCallback(const crow::request& req, const std::string& type)
+crow::response IROCBridge::missionCallback(const crow::request& req)
 {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a missionCallback message JSON -> ROS.");
   latest_mission_type_ = "waypoint";
 
   try {
     crow::json::rvalue json_msg = crow::json::load(req.body);
-    if (!json_msg || !json_msg.has("mission") || json_msg["mission"].t() != crow::json::type::List)
-      return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'mission' key\"}");
+    if (!json_msg || !json_msg.has("type") || !json_msg.has("details"))
+      return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'type' and 'details' keys\"}");
 
-    // Iterate over each robot in the mission
-    std::vector<iroc_mission_handler::MissionGoal> mission_robots;
-    for (const auto& mission_json : json_msg["mission"].lo()) {
-      std::scoped_lock lck(robot_handlers_.mtx);
-
-      std::string robot_name = mission_json["robot_name"].s();
-      auto*       rh_ptr     = findRobotHandler(robot_name, robot_handlers_);
-      if (!rh_ptr) {
-        ROS_WARN_STREAM("[IROCBridge]: Robot \"" << robot_name << "\" not found. Ignoring.");
-        return crow::response(crow::status::NOT_FOUND, "{\"message\": \"Robot '" + robot_name + "' not found\"}");
-      }
-
-      // Process the action request for each robot
-      iroc_mission_handler::MissionGoal mission_robot;
-      mission_robot.name            = robot_name;
-      mission_robot.frame_id        = mission_json["frame_id"].i();
-      mission_robot.height_id       = mission_json["height_id"].i();
-      mission_robot.terminal_action = mission_json["terminal_action"].i();
-
-      // Check robot type
-      bool use_z;
-      auto robot_type = rh_ptr->sh_general_robot_info.getMsg()->robot_type;
-      switch (robot_type) {
-        case static_cast<uint8_t>(robot_type_t::MULTIROTOR): {
-          ROS_INFO("[IROCBridge]: MULTIROTOR TYPE: ");
-          use_z = true;
-          break;
-        };
-        case static_cast<uint8_t>(robot_type_t::BOAT): {
-          ROS_INFO("[IROCBridge]: BOAT TYPE: ");
-          use_z = false;
-          break;
-        };
-        default:
-          ROS_WARN_STREAM("[IROCBridge]: Unknown robot type for robot \"" << robot_name << "\". Ignoring.");
-          return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Unknown robot type for robot '" + robot_name + "'\"}");
-          break;
-      }
-
-      // Process the points in the mission
-      std::vector<crow::json::rvalue> points = mission_json["points"].lo();
-      
-      std::vector<iroc_mission_handler::Waypoint> ref_points;
-      ref_points.reserve(points.size());
-      for (const auto& point : points) {
-        mrs_msgs::Reference ref;
-        ref.position.x = point["x"].d();
-        ref.position.y = point["y"].d();
-        if (use_z)
-          ref.position.z = point["z"].d();
-        ref.heading = point["heading"].d();
-
-        iroc_mission_handler::Waypoint waypoint;
-        waypoint.reference_point = ref;
-        if (point.has("subtasks")) {
-          std::vector<iroc_mission_handler::Subtask> subtasks;
-          for (const auto& subtask : point["subtasks"].lo()) {
-            iroc_mission_handler::Subtask subtask_obj;
-            subtask_obj.type = subtask["type"].i();
-            if (subtask.has("parameters")) {
-              subtask_obj.parameters = subtask["parameters"].s();
-            }
-            subtasks.push_back(subtask_obj);
-          }
-          waypoint.subtasks = subtasks;
-        }
-        ref_points.push_back(waypoint);
-      }
-      mission_robot.points = ref_points;
-      
-      // Debugging/logging
-      for (const auto& point : ref_points) {
-        ROS_INFO_STREAM("[IROCBridge]: Robot " << robot_name << " point: " << point.reference_point.position.x << ", " << point.reference_point.position.y << ", " << point.reference_point.position.z);
-      }
-
-      // Add the mission to the list of missions
-      mission_robots.push_back(mission_robot);
-    }
-      
     // Validate if the action client is connected and if the action is already running
     if (!fleet_manager_action_client_->isServerConnected()) {
       ROS_WARN_STREAM("[IROCBridge]: Action server is not connected. Check the iroc_fleet_manager node.");
@@ -1525,8 +1407,14 @@ crow::response IROCBridge::missionCallback(const crow::request& req, const std::
 
     // Send the action goal to the fleet manager
     FleetManagerGoal action_goal;
-    // TODO update with fleet manager new action
-    // action_goal.robots = mission_robots;
+    std::string type = json_msg["type"].s(); 
+
+    // Convert rvalue to wvalue, then dump to string
+    crow::json::wvalue details_wvalue(json_msg["details"]);
+    std::string details = details_wvalue.dump(); 
+
+    action_goal.type = type;
+    action_goal.details = details;
 
     fleet_manager_action_client_->sendGoal(
         action_goal,
@@ -1542,7 +1430,7 @@ crow::response IROCBridge::missionCallback(const crow::request& req, const std::
     );
 
     // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
-    ros::Duration(mission_robots.size() * 1.0).sleep();
+    ros::Duration(5).sleep();
 
     if (fleet_manager_action_client_->getState().isDone()) {  // If the action is done, the action finished instantly
       auto result = fleet_manager_action_client_->getResult();
@@ -1553,7 +1441,8 @@ crow::response IROCBridge::missionCallback(const crow::request& req, const std::
     }
     else {
       ROS_INFO("[IROCBridge]: Mission received successfully");
-      auto json = successMissionJson(mission_robots);
+      // TODO to replace with proper response, in ROS2
+      auto json = successMissionJson();
       return crow::response(crow::status::CREATED, json);
     }
   }

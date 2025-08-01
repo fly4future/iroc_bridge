@@ -67,7 +67,7 @@
       <remap from="~svc/velocity_reference" to="/control_manager/velocity_reference" />
 
       <!-- Services -->
-      <remap from="~ac/mission" to="fleet_manager" />
+      <remap from="~ac/mission" to="iroc_fleet_manager" />
       <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
       <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />
       <remap from="~svc/change_coverage_mission_state" to="iroc_coverage_planner/change_fleet_mission_state" />

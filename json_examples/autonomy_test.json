@@ -1,4 +1,7 @@
 {
-  "robot_name": "uav1",
-  "segment_length": 5 
+  "type": "autonomy-test",
+  "details": {
+    "robot_name": "uav1",
+    "segment_length": 5
+  }
 }
