@@ -63,6 +63,8 @@
 
 #include <unistd.h>
 #include <iostream>
+
+#include <iroc_bridge/common_handlers.h>
 //}
 
 namespace iroc_bridge
@@ -172,6 +174,8 @@ private:
     std::vector<robot_handler_t> handlers;
   } robot_handlers_;
 
+  CommonRobotHandlers_t common_robot_handlers_;
+
   // | ----------------------- main timer ----------------------- |
 
   ros::Timer timer_main_;
@@ -247,6 +251,10 @@ private:
 
   // Latlon origin
   mrs_msgs::Point2D  world_origin_;
+
+
+  // contains handlers that are shared with fleet manager and planners 
+  std::shared_ptr<iroc_bridge::CommonHandlers_t> common_handlers_;
 };
 //}
 
@@ -265,6 +273,13 @@ void IROCBridge::onInit() {
 
   /* waits for the ROS to publish clock */
   ros::Time::waitForValid();
+
+
+  // --------------------------------------------------------------
+  // |         common handler for fleet manager and planners      |
+  // --------------------------------------------------------------
+
+  common_handlers_ = std::make_shared<iroc_bridge::CommonHandlers_t>();
 
   /* load parameters */
   mrs_lib::ParamLoader param_loader(nh_, "IROCBridge");
@@ -402,9 +417,14 @@ void IROCBridge::onInit() {
     std::scoped_lock lck(robot_handlers_.mtx);
 
     robot_handlers_.handlers.reserve(filtered_robot_names.size());
+    common_robot_handlers_.handlers_map.reserve(filtered_robot_names.size());
     for (const auto& robot_name : filtered_robot_names) {
       robot_handler_t robot_handler;
+      // To share with fleet manager and planners
+      CommonRobotHandler_t common_robot_handler;
       robot_handler.robot_name = robot_name;
+      // Saving only the robot names to fill up the rest during the parsing of the messages
+      common_robot_handler.robot_name = robot_name;
 
       const std::string general_robot_info_topic_name = "/" + robot_name + nh_.resolveName("in/general_robot_info");
       robot_handler.sh_general_robot_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo>(shopts, general_robot_info_topic_name);
@@ -455,6 +475,7 @@ void IROCBridge::onInit() {
 
       // move is necessary because copy construction of the subscribe handlers is deleted due to mutexes
       robot_handlers_.handlers.emplace_back(std::move(robot_handler));
+      common_robot_handlers_.handlers_map[robot_name] = std::move(common_robot_handler);
     }
   }
 
@@ -494,27 +515,56 @@ void IROCBridge::onInit() {
 void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
   std::scoped_lock lck(robot_handlers_.mtx);
 
+  // Parsing the messages to send in telemetry and populating
+  // the common handler with the messages 
   for (auto& rh : robot_handlers_.handlers) {
     const auto& robot_name = rh.robot_name;
 
-    if (rh.sh_general_robot_info.newMsg())
-      parseGeneralRobotInfo(rh.sh_general_robot_info.getMsg(), robot_name);
+    if (rh.sh_general_robot_info.newMsg()) {
+      const auto general_robot_info_msg = rh.sh_general_robot_info.getMsg();
+      parseGeneralRobotInfo(general_robot_info_msg, robot_name);
+      common_robot_handlers_.handlers_map[robot_name].general_robot_info =
+        std::move(general_robot_info_msg);
+    }
 
-    if (rh.sh_state_estimation_info.newMsg())
-      parseStateEstimationInfo(rh.sh_state_estimation_info.getMsg(), robot_name);
+    if (rh.sh_state_estimation_info.newMsg()) {
+      const auto state_estimation_info_msg =
+          rh.sh_state_estimation_info.getMsg();
+      parseStateEstimationInfo(state_estimation_info_msg, robot_name);
+      common_robot_handlers_.handlers_map[robot_name].state_estimation_info =
+        std::move(state_estimation_info_msg);
+    }
 
-    if (rh.sh_control_info.newMsg())
-      parseControlInfo(rh.sh_control_info.getMsg(), robot_name);
+    if (rh.sh_control_info.newMsg()) {
+      const auto control_info_msg = rh.sh_control_info.getMsg();
+      parseControlInfo(control_info_msg,robot_name);
+      common_robot_handlers_.handlers_map[robot_name].control_info =
+        std::move(control_info_msg);
+    }
 
-    if (rh.sh_collision_avoidance_info.newMsg())
-      parseCollisionAvoidanceInfo(rh.sh_collision_avoidance_info.getMsg(), robot_name);
+    if (rh.sh_collision_avoidance_info.newMsg()) {
+      const auto collision_avoidance_info_msg =
+          rh.sh_collision_avoidance_info.getMsg();
+      parseCollisionAvoidanceInfo(collision_avoidance_info_msg, robot_name);
+      common_robot_handlers_.handlers_map[robot_name].collision_avoidance_info =
+        std::move(collision_avoidance_info_msg);
+    }
 
-    if (rh.sh_uav_info.newMsg())
-      parseUavInfo(rh.sh_uav_info.getMsg(), robot_name);
+    if (rh.sh_uav_info.newMsg()) {
+      const auto uav_info_msg = rh.sh_uav_info.getMsg();
+      parseUavInfo(uav_info_msg, robot_name);
+      common_robot_handlers_.handlers_map[robot_name].uav_info = 
+        std::move(uav_info_msg);
+    }
 
-    if (rh.sh_system_health_info.newMsg())
-      parseSystemHealthInfo(rh.sh_system_health_info.getMsg(), robot_name);
+    if (rh.sh_system_health_info.newMsg()) {
+      const auto system_health_info = rh.sh_system_health_info.getMsg();
+      parseSystemHealthInfo(system_health_info, robot_name);
+      common_robot_handlers_.handlers_map[robot_name].system_health_info =
+       std::move(system_health_info);
+    }
   }
+
 }
 //}
 
@@ -630,6 +680,7 @@ template <typename Feedback>
 
 /* parseGeneralRobotInfo() //{ */
 void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::ConstPtr general_robot_info, const std::string& robot_name) {
+
   json json_msg = {
     {"robot_name", general_robot_info->robot_name},
     {"robot_type", general_robot_info->robot_type},
