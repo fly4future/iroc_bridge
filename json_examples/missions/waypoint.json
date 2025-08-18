@@ -26,8 +26,8 @@
             "heading": 3,
             "subtasks": [
               {
-                "type": "gimbal",
-                "parameters": [0.5, 0.5, 0.5]
+                "type": 1,
+                "parameters": [0.5,0.5,0.5]
               }
             ]
           },
@@ -44,8 +44,8 @@
             "heading": 3,
             "subtasks": [
               {
-                "type": "wait",
-                "parameters": 5.6
+                "type": 0,
+                "parameters": "5.6"
               }
             ]
           },
@@ -53,13 +53,7 @@
             "x": 20,
             "y": 10,
             "z": 3,
-            "heading": 1,
-            "subtasks": [
-              {
-                "type": "wait",
-                "parameters": 5.6
-              }
-            ]
+            "heading": 1
           }
         ],
         "terminal_action": 0

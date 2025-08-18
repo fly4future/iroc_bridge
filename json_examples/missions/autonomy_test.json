@@ -1,0 +1,11 @@
+{
+  "type": "AutonomyTestPlanner",
+  "details": {
+    "robots": [
+      {
+        "name": "uav1",
+        "segment_length": 5
+      }
+    ]
+  }
+}
