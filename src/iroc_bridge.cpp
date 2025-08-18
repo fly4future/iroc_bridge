@@ -53,12 +53,7 @@
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 #include <mrs_robot_diagnostics/enums/robot_type.h>
 
-#include <iroc_fleet_manager/WaypointFleetManagerAction.h>
 #include <iroc_fleet_manager/FleetManagerAction.h>
-#include <iroc_fleet_manager/CoverageMissionAction.h>
-#include <iroc_fleet_manager/CoverageMissionRobot.h>
-#include <iroc_fleet_manager/AutonomyTestAction.h>
-
 #include <iroc_mission_handler/MissionAction.h>
 
 #include <unistd.h>
@@ -106,7 +101,17 @@ class IROCBridge : public nodelet::Nodelet {
   };
 
   // | ---------------------- Command types --------------------- |
-  enum class CommandType { Takeoff, Land, Hover, Home, Set_Origin, Set_SafetyBorder, Set_Obstacle, Unknown };
+  enum class CommandType
+  {
+    Takeoff,
+    Land,
+    Hover,
+    Home,
+    Set_Origin,
+    Set_SafetyBorder,
+    Set_Obstacle,
+    Unknown
+  };
 
   enum class Change_SvC_T { FleetWaypoint, RobotWaypoint, FleetCoverage, RobotCoverage, RobotAutonomyTest };
 
@@ -249,34 +254,18 @@ void IROCBridge::onInit() {
   mrs_lib::ParamLoader param_loader(nh_, "IROCBridge");
 
   std::string custom_config_path;
-  std::string network_config_path;
-
   param_loader.loadParam("custom_config", custom_config_path);
 
+  // Custom config loaded first to have the priority, if not given it takes the default config file
   if (custom_config_path != "") {
+    ROS_INFO("Added custom config");
     param_loader.addYamlFile(custom_config_path);
   }
 
+  param_loader.addYamlFileFromParam("network_config");
   param_loader.addYamlFileFromParam("config");
 
-  param_loader.loadParam("network_config", network_config_path);
-
-  if (network_config_path != "") {
-    param_loader.addYamlFile(network_config_path);
-  }
-
-  const auto main_timer_rate = param_loader.loadParam2<double>("main_timer_rate");
-  const auto _http_server_threads_ = param_loader.loadParam2<double>("http_server_threads");
-  const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("no_message_timeout");
-
-  const auto url = param_loader.loadParam2<std::string>("url");
-  const auto client_port = param_loader.loadParam2<int>("client_port");
-  const auto server_port = param_loader.loadParam2<int>("server_port");
-
   const auto robot_names = param_loader.loadParam2<std::vector<std::string>>("network/robot_names");
-
-  max_linear_speed_ = param_loader.loadParam2<double>("remote_control_limits/max_linear_speed");
-  max_heading_rate_ = param_loader.loadParam2<double>("remote_control_limits/max_heading_rate");
 
   // Remove ground-station hostname from robot names
   std::string hostname_str(hostname.data());
@@ -285,11 +274,17 @@ void IROCBridge::onInit() {
   auto it = std::remove(filtered_robot_names.begin(), filtered_robot_names.end(), hostname_str);
   filtered_robot_names.erase(it, filtered_robot_names.end());
 
-  std::cout << "Filtered robot names: ";
-  for (const auto& name : filtered_robot_names) {
-    std::cout << name << " ";
-  }
-  std::cout << std::endl;
+  // Arguments given in launchfile
+  const auto url = param_loader.loadParam2<std::string>("url");
+  const auto client_port = param_loader.loadParam2<int>("client_port");
+  const auto server_port = param_loader.loadParam2<int>("server_port");
+  
+  const auto main_timer_rate = param_loader.loadParam2<double>("iroc_bridge/main_timer_rate");
+  const auto _http_server_threads_ = param_loader.loadParam2<double>("iroc_bridge/http_server_threads");
+  const auto no_message_timeout = param_loader.loadParam2<ros::Duration>("iroc_bridge/no_message_timeout");
+
+  max_linear_speed_ = param_loader.loadParam2<double>("iroc_bridge/remote_control_limits/max_linear_speed");
+  max_heading_rate_ = param_loader.loadParam2<double>("iroc_bridge/remote_control_limits/max_heading_rate");
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[IROCBridge]: Could not load all parameters!");
