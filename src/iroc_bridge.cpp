@@ -53,7 +53,7 @@
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
 #include <mrs_robot_diagnostics/enums/robot_type.h>
 
-#include <iroc_fleet_manager/FleetManagerAction.h>
+#include <iroc_fleet_manager/IROCFleetManagerAction.h>
 #include <iroc_mission_handler/MissionAction.h>
 
 #include <unistd.h>
@@ -70,9 +70,9 @@ using vec4_t = Eigen::Vector4d;
 
 using namespace actionlib;
 
-using FleetManagerActionClient = SimpleActionClient<iroc_fleet_manager::FleetManagerAction>;
+using FleetManagerActionClient = SimpleActionClient<iroc_fleet_manager::IROCFleetManagerAction>;
 // Waypoint mission goal
-typedef iroc_fleet_manager::FleetManagerGoal FleetManagerGoal;
+typedef iroc_fleet_manager::IROCFleetManagerGoal FleetManagerGoal;
 typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
 
 /* class IROCBridge //{ */
@@ -258,7 +258,6 @@ void IROCBridge::onInit() {
 
   // Custom config loaded first to have the priority, if not given it takes the default config file
   if (custom_config_path != "") {
-    ROS_INFO("Added custom config");
     param_loader.addYamlFile(custom_config_path);
   }
 
@@ -1312,8 +1311,8 @@ crow::response IROCBridge::missionCallback(const crow::request& req) {
     action_goal.details = details;
 
     fleet_manager_action_client_->sendGoal(
-        action_goal, [this](const auto& state, const auto& result) { missionDoneCallback<iroc_fleet_manager::FleetManagerResult>(state, result); },
-        [this]() { missionActiveCallback(); }, [this](const auto& feedback) { missionFeedbackCallback<iroc_fleet_manager::FleetManagerFeedback>(feedback); });
+        action_goal, [this](const auto& state, const auto& result) { missionDoneCallback<iroc_fleet_manager::IROCFleetManagerResult>(state, result); },
+        [this]() { missionActiveCallback(); }, [this](const auto& feedback) { missionFeedbackCallback<iroc_fleet_manager::IROCFleetManagerFeedback>(feedback); });
 
     // Waiting in the case the trajectories are rejected. We can better wait will the state is pending
     ros::Duration(5).sleep();
