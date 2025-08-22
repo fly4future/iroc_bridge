@@ -13,7 +13,6 @@ set(CATKIN_DEPENDENCIES
   mrs_msgs
   mrs_robot_diagnostics
   mrs_lib
-  iroc_mission_handler
   iroc_fleet_manager 
   actionlib
   )
