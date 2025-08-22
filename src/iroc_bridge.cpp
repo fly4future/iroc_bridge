@@ -29,6 +29,9 @@
 
 #include <mrs_msgs/String.h>
 #include <iroc_fleet_manager/ChangeRobotMissionStateSrv.h>
+#include <iroc_fleet_manager/GetWorldOriginSrv.h>
+#include <iroc_fleet_manager/GetSafetyBorderSrv.h>
+#include <iroc_fleet_manager/GetObstaclesSrv.h>
 
 #include <mrs_msgs/ReferenceStampedSrv.h>
 #include <mrs_msgs/ReferenceStampedSrvRequest.h>
@@ -164,6 +167,9 @@ class IROCBridge : public nodelet::Nodelet {
   // | ----------------------- ROS Clients ----------------------- |
   ros::ServiceClient sc_change_fleet_mission_state_;
   ros::ServiceClient sc_change_robot_mission_state_;
+  ros::ServiceClient sc_get_world_origin_;
+  ros::ServiceClient sc_get_safety_border_;
+  ros::ServiceClient sc_get_obstacles_;
 
   // | ----------------- action client callbacks ---------------- |
 
@@ -198,8 +204,11 @@ class IROCBridge : public nodelet::Nodelet {
   // REST API callbacks
   crow::response pathCallback(const crow::request& req);
   crow::response setOriginCallback(const crow::request& req);
+  crow::response getOriginCallback(const crow::request& req);
   crow::response setSafetyBorderCallback(const crow::request& req);
+  crow::response getSafetyBorderCallback(const crow::request& req);
   crow::response setObstacleCallback(const crow::request& req);
+  crow::response getObstaclesCallback(const crow::request& req);
   crow::response missionCallback(const crow::request& req);
 
   crow::response changeFleetMissionStateCallback(const crow::request& req, const std::string& type);
@@ -214,6 +223,10 @@ class IROCBridge : public nodelet::Nodelet {
   // some helper method overloads
   template <typename Svc_T>
   result_t callService(ros::ServiceClient& sc, typename Svc_T::Request req);
+
+  template <typename Svc_T>
+  result_t callService(ros::ServiceClient& sc, typename Svc_T::Request req,  typename Svc_T::Response &res);
+
 
   template <typename Svc_T>
   result_t callService(ros::ServiceClient& sc);
@@ -296,10 +309,15 @@ void IROCBridge::onInit() {
   // Server
   // Do we need this (set_path)?
   CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return pathCallback(req); });
-  CROW_ROUTE(http_srv_, "/safety-area/origin").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return setOriginCallback(req); });
+  CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return setSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return setObstacleCallback(req); });
   CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Post)([this](const crow::request& req) { return missionCallback(req); });
+
+  // Getters
+  CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getOriginCallback(req); });
+  CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getSafetyBorderCallback(req); });
+  CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getObstaclesCallback(req); });
 
   // Missions
   // TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
@@ -440,6 +458,18 @@ void IROCBridge::onInit() {
   sc_change_robot_mission_state_ = nh_.serviceClient<iroc_fleet_manager::ChangeRobotMissionStateSrv>(nh_.resolveName("svc/change_robot_mission_state"));
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_robot_mission_state\' -> \'%s\'",
            sc_change_robot_mission_state_.getService().c_str());
+
+  sc_get_world_origin_ = nh_.serviceClient<iroc_fleet_manager::GetWorldOriginSrv>(nh_.resolveName("svc/get_world_origin"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_world_origin\' -> \'%s\'",
+           sc_get_world_origin_.getService().c_str());
+
+  sc_get_safety_border_ = nh_.serviceClient<iroc_fleet_manager::GetSafetyBorderSrv>(nh_.resolveName("svc/get_safety_border"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_safety_border\' -> \'%s\'",
+           sc_get_safety_border_.getService().c_str());
+
+  sc_get_obstacles_= nh_.serviceClient<iroc_fleet_manager::GetObstaclesSrv>(nh_.resolveName("svc/get_obstacles"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_obstacles\' -> \'%s\'",
+           sc_get_obstacles_.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
 
@@ -794,6 +824,24 @@ IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc, typename Sv
   }
 }
 
+/* callService() //{ */
+template <typename Svc_T>
+IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc, typename Svc_T::Request req, typename Svc_T::Response &res) {
+  if (sc.call(req, res)) {
+    if (res.success) {
+      ROS_INFO_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      return {true, res.message};
+    } else {
+      ROS_WARN_STREAM_THROTTLE(1.0, "Called service \"" << sc.getService() << "\" with response \"" << res.message << "\".");
+      return {false, res.message};
+    }
+  } else {
+    const std::string msg = "Failed to call service \"" + sc.getService() + "\".";
+    ROS_WARN_STREAM(msg);
+    return {false, msg};
+  }
+}
+
 template <typename Svc_T>
 IROCBridge::result_t IROCBridge::callService(ros::ServiceClient& sc) {
   return callService<Svc_T>(sc, {});
@@ -1112,6 +1160,37 @@ crow::response IROCBridge::setOriginCallback(const crow::request& req) {
 }
 //}
 
+/* getOriginCallback() method //{ */
+
+/**
+ * \brief Callback to get the world origin. 
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::getOriginCallback(const crow::request &req) {
+
+  ROS_INFO_STREAM("[IROCBridge]: Processing a getOriginCallback");
+
+  iroc_fleet_manager::GetWorldOriginSrv world_origin_service;
+
+  const auto resp = callService<iroc_fleet_manager::GetWorldOriginSrv>(sc_get_world_origin_, world_origin_service.request, world_origin_service.response);
+
+  json json_msg;
+  if (!resp.success) {
+    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+    return crow::response(crow::status::CONFLICT, json_msg.dump());
+  } else {
+    json_msg["message"] = world_origin_service.response.message;
+    json_msg["x"]       = world_origin_service.response.origin_x;
+    json_msg["y"]       = world_origin_service.response.origin_y;
+    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  }
+}
+//}
+
+
 /* setSafetyBorderCallback() method //{ */
 
 /**
@@ -1192,6 +1271,48 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
 }
 //}
 
+/* getSafetyBorderCallback() method //{ */
+
+/**
+ * \brief Callback to get the safety area border. 
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::getSafetyBorderCallback(const crow::request &req) {
+
+  ROS_INFO_STREAM("[IROCBridge]: Processing a getSafetyBorderCallback message ROS -> JSON.");
+  iroc_fleet_manager::GetSafetyBorderSrv get_safety_border_service;
+
+  const auto resp = callService<iroc_fleet_manager::GetSafetyBorderSrv>(sc_get_safety_border_, get_safety_border_service.request, get_safety_border_service.response);
+
+  json json_msg;
+  if (!resp.success) {
+    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+    return crow::response(crow::status::CONFLICT, json_msg.dump());
+  } else {
+    json_msg["message"] = get_safety_border_service.response.message;
+
+    json points                   = json::list();
+    auto vector_points            = get_safety_border_service.response.border.points; 
+    double max_z                  = get_safety_border_service.response.border.max_z; 
+    double min_z                  = get_safety_border_service.response.border.min_z; 
+    std::string  horizontal_frame = get_safety_border_service.response.border.horizontal_frame; 
+    std::string  vertical_frame   = get_safety_border_service.response.border.vertical_frame; 
+
+    for (size_t i = 0; i < vector_points.size(); i++) {
+      const auto point = vector_points.at(i);
+      json point_json  = {{"x", point.x}, {"y", point.y}};
+      points[i] = std::move(point_json);
+    }
+
+    json json_msg = {{"message", "All robots in the fleet with the same safety border"}, {"points", points}, {"max_z", max_z}, {"min_z", min_z}};
+    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  }
+}
+//}
+
 /* setObstacleCallback() method //{ */
 
 /**
@@ -1268,6 +1389,60 @@ crow::response IROCBridge::setObstacleCallback(const crow::request& req) {
   const auto result = commandAction<mrs_msgs::SetObstacleSrv>(robot_names, "set_obstacle", obstacle_req);
 
   return crow::response(result.status_code, result.message);
+}
+//}
+
+/* getObstaclesCallback() method //{ */
+
+/**
+ * \brief Callback to get the obstacles. 
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::getObstaclesCallback(const crow::request &req) {
+
+  ROS_INFO_STREAM("[IROCBridge]: Processing a getObstaclesCallback message ROS -> JSON.");
+  iroc_fleet_manager::GetObstaclesSrv get_obstacles_service;
+
+  const auto resp = callService<iroc_fleet_manager::GetObstaclesSrv>(sc_get_obstacles_, get_obstacles_service.request, get_obstacles_service.response);
+
+  json json_msg;
+  if (!resp.success) {
+    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
+    return crow::response(crow::status::CONFLICT, json_msg.dump());
+  } else {
+
+    json_msg["message"]      = get_obstacles_service.response.message;
+    int number_of_obstacles  = get_obstacles_service.response.obstacles.rows.size();
+    auto obstacles           = get_obstacles_service.response.obstacles;
+    json obstacles_json_list = json::list(); 
+
+    size_t point_index = 0; 
+
+    for (size_t i = 0; i < number_of_obstacles; i++) {
+      int number_of_vertices = obstacles.rows.at(i);
+      double max_z           = obstacles.max_z.at(i); 
+      double min_z           = obstacles.min_z.at(i); 
+
+      // Extract the points for the obstacle
+      json points_list = json::list();
+      for (int j = 0; j < number_of_vertices; j++) {
+        if (point_index < obstacles.data.size()) {
+          json point = {{"x", obstacles.data.at(point_index).x}, {"y", obstacles.data.at(point_index).y}};
+          points_list[j] = std::move(point);
+          point_index++; // Move to next point
+        }
+      }
+
+      json obstacle_json = {{"points", points_list},{"max_z", max_z}, {"min_z", min_z}};
+      obstacles_json_list[i] = std::move(obstacle_json);
+    }
+
+    json json_msg = {{"message", "All robots in the fleet with the same obstacles"}, {"obstacles", obstacles_json_list}};
+    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  }
 }
 //}
 
@@ -1436,7 +1611,7 @@ crow::response IROCBridge::commandCallback(const crow::request& req, const std::
 crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::request& req) {
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
+  for (const auto &rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
 
   json json_msg;

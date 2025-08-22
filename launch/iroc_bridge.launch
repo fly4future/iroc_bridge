@@ -67,6 +67,9 @@
       <remap from="~ac/mission" to="iroc_fleet_manager" />
       <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
       <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />
+      <remap from="~svc/get_world_origin" to="iroc_fleet_manager/get_world_origin" />
+      <remap from="~svc/get_safety_border" to="iroc_fleet_manager/get_safety_border" />
+      <remap from="~svc/get_obstacles" to="iroc_fleet_manager/get_obstacles" />
     </node>
 
   </group>
