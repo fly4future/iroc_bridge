@@ -70,6 +70,7 @@
       <remap from="~svc/get_world_origin" to="iroc_fleet_manager/get_world_origin" />
       <remap from="~svc/get_safety_border" to="iroc_fleet_manager/get_safety_border" />
       <remap from="~svc/get_obstacles" to="iroc_fleet_manager/get_obstacles" />
+      <remap from="~svc/get_mission_points" to="iroc_fleet_manager/get_mission_points" />
     </node>
 
   </group>
