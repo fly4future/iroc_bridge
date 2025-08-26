@@ -1016,24 +1016,52 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 }
 //}
 
-/* toJson() method //{ */
+/* resultToJson() method //{ */
 
 template <typename Result>
 json resultToJson(const boost::shared_ptr<const Result>& result) {
   json robot_results = json::list();
-
   for (size_t i = 0; i < result->robot_results.size(); i++) {
-    robot_results[i] = {{"robot_name", result->robot_results[i].name},
+    robot_results[i] = {{"robot", result->robot_results[i].name},
                         {"success", static_cast<bool>(result->robot_results[i].success)},
-                        {"message", result->robot_results[i].message}};
+                        {"message", result->robot_results[i].message},
+                        {"mission", json::list()}};
   }
-
   // Create the main JSON object
-  json json_msg = {{"success", static_cast<bool>(result->success)}, {"message", result->message}, {"robot_results", robot_results}};
-
+  json json_msg = {{"success", static_cast<bool>(result->success)}, {"message", result->message}, {"robot_data", robot_results}};
   return json_msg;
 }
 //}
+
+/* missionGoalToJson() method //{ */
+
+json missionGoalToJson(std::vector<iroc_mission_handler::MissionGoal> &mission_goals) {
+  json robots_data = json::list();
+
+  for (size_t i = 0; i < mission_goals.size(); i++) {
+    std::string robot_name = mission_goals.at(i).name;
+    auto points            = mission_goals.at(i).points;
+    int frame_id           = mission_goals.at(i).frame_id;
+    int height_id          = mission_goals.at(i).height_id;
+
+    // Extract the points
+    json points_list = json::list();
+    for (int j = 0; j < points.size(); j++) {
+      mrs_msgs::Reference reference = points.at(j).reference;
+      json point                    = {{"x", reference.position.x}, {"y", reference.position.y}, {"z", reference.position.z}, {"heading", reference.heading}};
+      points_list[j]                = std::move(point);
+    }
+    json mission    = {{"points", points_list}, {"frame_id", frame_id}, {"height_id", height_id}};
+    json robot_data = {{"robot", robot_name}, {"success", true}, {"message", "Mission loaded successfully"}, {"mission", mission}};
+    robots_data[i]  = std::move(robot_data);
+  }
+
+  json response = {{"success", true}, {"message", "Mission uploaded successfully"}, {"robot_data", robots_data}};
+
+  return response;
+}
+//}
+
 
 // --------------------------------------------------------------
 // |                     REST API callbacks                     |
@@ -1489,53 +1517,29 @@ crow::response IROCBridge::missionCallback(const crow::request &req) {
 
     if (fleet_manager_action_client_->getState().isDone()) { // If the action is done, the action finished instantly
       auto result        = fleet_manager_action_client_->getResult();
-      // TODO
       auto json          = resultToJson(result);
       const auto message = result->message;
       ROS_WARN("[IROCBridge]: %s", message.c_str());
       return crow::response(crow::status::BAD_REQUEST, json);
-    } else {
-      ROS_INFO("[IROCBridge]: Mission received successfully");
-      // TODO to replace with proper response, in ROS2
-      iroc_fleet_manager::GetMissionPointsSrv get_mission_points_service;
-
-      const auto resp =
-          callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_points_, get_mission_points_service.request, get_mission_points_service.response);
-
-      json json_msg;
-      if (!resp.success) {
-        json_msg["message"]     = resp.message;
-        json_msg["success"]     = false;
-        json_msg["robot_goals"] = NULL;
-        ROS_WARN_STREAM("[IROCBridge]: " << json_msg["message"].dump());
-        return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
-      } else {
-
-        json_msg["message"]   = get_mission_points_service.response.message;
-        auto robot_goals      = get_mission_points_service.response.mission_robots;
-        json mission          = json::list();
-
-        for (size_t i = 0; i < robot_goals.size(); i++) {
-          std::string robot_name = robot_goals.at(i).name;
-          ROS_INFO("Robot name %s", robot_name.c_str());
-          auto points            = robot_goals.at(i).points;
-          int frame_id           = robot_goals.at(i).frame_id;
-          int height_id          = robot_goals.at(i).height_id;
-
-          // Extract the points
-          json points_list = json::list();
-          for (int j = 0; j < points.size(); j++) {
-            mrs_msgs::Reference reference = points.at(j).reference;
-            json point     = {{"x", reference.position.x}, {"y", reference.position.y}, {"z", reference.position.z}, {"heading", reference.heading}};
-            points_list[j] = std::move(point);
-          }
-          json robot_goal = {{"robot", robot_name}, {"points", points_list}, {"frame_id", frame_id}, {"height_id", height_id}};
-          mission[i]   = std::move(robot_goal);
-        }
-        json json_msg = {{"success", true}, {"message", "Mission uploaded successfully"}, {"robot_goals", mission}};
-        return crow::response(crow::status::CREATED, json_msg.dump());
-      }
     }
+
+    // TODO to replace with proper action response in ROS2
+    iroc_fleet_manager::GetMissionPointsSrv get_mission_points_service;
+    const auto resp =
+        callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_points_, get_mission_points_service.request, get_mission_points_service.response);
+
+    if (!resp.success) {
+      json error_response;
+      error_response["message"]     = resp.message;
+      error_response["success"]     = false;
+      error_response["robot_data"]  = json::list();
+      ROS_WARN_STREAM("[IROCBridge]: " << error_response["message"].dump());
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
+    }
+
+    auto mission_goal = get_mission_points_service.response.mission_robots;
+    auto json = missionGoalToJson(mission_goal);
+    return crow::response(crow::status::CREATED, json.dump());
   }
   catch (const std::exception &e) {
     ROS_WARN_STREAM("[IROCBridge]: Failed to parse JSON from message: " << e.what());
