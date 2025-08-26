@@ -550,7 +550,7 @@ void IROCBridge::missionActiveCallback() {
 /* missionDoneCallback //{ */
 template <typename Result>
 void IROCBridge::missionDoneCallback(const SimpleClientGoalState& state, const boost::shared_ptr<const Result>& result) {
-  if (result == NULL) {
+  if (result == nullptr) {
     ROS_WARN("[IROCBridge]: Probably fleet_manager died, and action server connection was lost!, reconnection is not currently handled, if mission manager was "
              "restarted need to upload a new mission!");
 
