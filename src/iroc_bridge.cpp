@@ -1234,9 +1234,10 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
   bool enabled = true; // Defined default as true
 
   // Get message properties
-  int height_id = json_msg["height_id"].i();
-  int max_z = json_msg["max_z"].i();
-  int min_z = json_msg["min_z"].i();
+  int height_id                          = json_msg["height_id"].i();
+  int max_z                              = json_msg["max_z"].i();
+  int min_z                              = json_msg["min_z"].i();
+  bool keep_obstacles                    = json_msg["keep_obstacles"].b();
   std::vector<crow::json::rvalue> points = json_msg["points"].lo();
 
   std::string horizontal_frame = "latlon_origin";
@@ -1285,7 +1286,8 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
 
   // check that all robot names are valid and find the corresponding robot handlers
   mrs_msgs::SetSafetyBorderSrvRequest service_request;
-  service_request.safety_border = safety_border;
+  service_request.safety_border  = safety_border;
+  service_request.keep_obstacles = keep_obstacles;
   mrs_msgs::SetSafetyBorderSrv::Request req_srv = service_request;
 
   const auto result = commandAction<mrs_msgs::SetSafetyBorderSrv>(robot_names, "set_safety_border", req_srv);
@@ -1344,74 +1346,98 @@ crow::response IROCBridge::getSafetyBorderCallback(const crow::request &req) {
  * \param req Crow request
  * \return res Crow response
  */
-crow::response IROCBridge::setObstacleCallback(const crow::request& req) {
-
+crow::response IROCBridge::setObstacleCallback(const crow::request &req) {
   ROS_INFO_STREAM("[IROCBridge]: Parsing a setObstacleCallback message JSON -> ROS.");
-
   crow::json::rvalue json_msg = crow::json::load(req.body);
   if (!json_msg)
     return crow::response(crow::status::BAD_REQUEST, "Failed to parse JSON" + req.body);
 
-  // Get message properties
-  int height_id = json_msg["height_id"].i();
-  int max_z = json_msg["max_z"].i();
-  int min_z = json_msg["min_z"].i();
-  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
+  // Check if obstacles array exists
+  if (!json_msg.has("obstacles") || !json_msg["obstacles"]) {
+    return crow::response(crow::status::BAD_REQUEST, "Missing obstacles array: " + req.body);
+  }
 
-  std::string horizontal_frame = "latlon_origin";
-  std::string vertical_frame;
+  std::vector<crow::json::rvalue> obstacles = json_msg["obstacles"].lo();
+  if (obstacles.empty()) {
+    return crow::response(crow::status::BAD_REQUEST, "Empty obstacles array: " + req.body);
+  }
 
+  std::string horizontal_frame             = "latlon_origin";
   std::map<int, std::string> height_id_map = {
       {0, "world_origin"},
       {1, "latlon_origin"},
   };
 
-  auto it = height_id_map.find(height_id);
-  if (it != height_id_map.end()) // check if the height_id is valid (exists in the map)
-    vertical_frame = it->second;
-
-  else
-    return crow::response(crow::status::BAD_REQUEST, "Unknown height_id field: " + req.body);
-
-  if (points.empty())
-    return crow::response(crow::status::BAD_REQUEST, "Empty points array: " + req.body);
-
-  // Process points
-  std::vector<mrs_msgs::Point2D> border_points;
-  border_points.reserve(points.size());
-
-  for (const auto& el : points) {
-    if (!el.has("x") || !el.has("y"))
-      return crow::response(crow::status::BAD_REQUEST, "Missing x or y in point: " + req.body);
-
-    mrs_msgs::Point2D pt;
-    pt.x = el["x"].d();
-    pt.y = el["y"].d();
-
-    border_points.push_back(pt);
-  }
-
-  // Logging
-  ROS_INFO("[IROCBridge]: Obstacle border points size %zu ", border_points.size());
-
-  mrs_msgs::SetObstacleSrvRequest obstacle_req;
-
-  obstacle_req.horizontal_frame = horizontal_frame;
-  obstacle_req.vertical_frame = vertical_frame;
-  obstacle_req.points = border_points;
-  obstacle_req.max_z = max_z;
-  obstacle_req.min_z = min_z;
-
+  // Get robot names once (outside the loop)
   std::scoped_lock lck(robot_handlers_.mtx);
-
   std::vector<std::string> robot_names;
   robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto& rh : robot_handlers_.handlers)
+  for (const auto &rh : robot_handlers_.handlers)
     robot_names.push_back(rh.robot_name);
 
-  const auto result = commandAction<mrs_msgs::SetObstacleSrv>(robot_names, "set_obstacle", obstacle_req);
+  // Process each obstacle
+  for (size_t i = 0; i < obstacles.size(); ++i) {
+    const auto &obstacle = obstacles[i];
 
-  return crow::response(result.status_code, result.message);
+    // Get obstacle properties
+    if (!obstacle.has("height_id") || !obstacle.has("max_z") || !obstacle.has("min_z") || !obstacle.has("points")) {
+      return crow::response(crow::status::BAD_REQUEST, "Missing required fields in obstacle " + std::to_string(i) + ": " + req.body);
+    }
+
+    int height_id                          = obstacle["height_id"].i();
+    int max_z                              = obstacle["max_z"].i();
+    int min_z                              = obstacle["min_z"].i();
+    std::vector<crow::json::rvalue> points = obstacle["points"].lo();
+
+    // Validate height_id
+    std::string vertical_frame;
+    auto it = height_id_map.find(height_id);
+    if (it != height_id_map.end()) {
+      vertical_frame = it->second;
+    } else {
+      return crow::response(crow::status::BAD_REQUEST, "Unknown height_id field in obstacle " + std::to_string(i) + ": " + req.body);
+    }
+
+    if (points.empty()) {
+      return crow::response(crow::status::BAD_REQUEST, "Empty points array in obstacle " + std::to_string(i) + ": " + req.body);
+    }
+
+    // Process points
+    std::vector<mrs_msgs::Point2D> border_points;
+    border_points.reserve(points.size());
+    for (const auto &el : points) {
+      if (!el.has("x") || !el.has("y")) {
+        return crow::response(crow::status::BAD_REQUEST, "Missing x or y in point for obstacle " + std::to_string(i) + ": " + req.body);
+      }
+      mrs_msgs::Point2D pt;
+      pt.x = el["x"].d();
+      pt.y = el["y"].d();
+      border_points.push_back(pt);
+    }
+
+    // Logging
+    ROS_INFO("[IROCBridge]: Obstacle %zu border points size %zu", i, border_points.size());
+
+    // Create obstacle request
+    mrs_msgs::SetObstacleSrvRequest obstacle_req;
+    obstacle_req.horizontal_frame = horizontal_frame;
+    obstacle_req.vertical_frame   = vertical_frame;
+    obstacle_req.points           = border_points;
+    obstacle_req.max_z            = max_z;
+    obstacle_req.min_z            = min_z;
+
+    // Call service for this obstacle
+    const auto result = commandAction<mrs_msgs::SetObstacleSrv>(robot_names, "set_obstacle", obstacle_req);
+
+    // Check if the service call failed
+    if (!result.success) {
+      ROS_ERROR("[IROCBridge]: Failed to set obstacle %zu: %s", i, result.message.c_str());
+      return crow::response(result.status_code, "Failed to set obstacle " + std::to_string(i) + ": " + result.message);
+    }
+  }
+
+  ROS_INFO("[IROCBridge]: Successfully set %zu obstacles", obstacles.size());
+  return crow::response(crow::status::OK, "Successfully set " + std::to_string(obstacles.size()) + " obstacles");
 }
 //}
 
