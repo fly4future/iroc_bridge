@@ -58,6 +58,7 @@
 #include <mrs_robot_diagnostics/enums/robot_type.h>
 
 #include <iroc_fleet_manager/IROCFleetManagerAction.h>
+#include <iroc_fleet_manager/IROCFleetMissionGoal.h>
 
 #include <unistd.h>
 #include <iostream>
@@ -212,6 +213,7 @@ class IROCBridge : public nodelet::Nodelet {
   crow::response setObstacleCallback(const crow::request& req);
   crow::response getObstaclesCallback(const crow::request& req);
   crow::response missionCallback(const crow::request& req);
+  crow::response getMissionCallback(const crow::request& req);
 
   crow::response changeFleetMissionStateCallback(const crow::request& req, const std::string& type);
   crow::response changeRobotMissionStateCallback(const crow::request& req, const std::string& robot_name, const std::string& type);
@@ -320,6 +322,7 @@ void IROCBridge::onInit() {
   CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getObstaclesCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Get)([this](const crow::request& req) { return getMissionCallback(req); });
 
   // Missions
   // TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
@@ -1035,14 +1038,17 @@ json resultToJson(const boost::shared_ptr<const Result>& result) {
 
 /* missionGoalToJson() method //{ */
 
-json missionGoalToJson(std::vector<iroc_mission_handler::MissionGoal> &mission_goals) {
+json missionGoalToJson(const iroc_fleet_manager::IROCFleetMissionGoal &mission_goal) {
   json robots_data = json::list();
 
-  for (size_t i = 0; i < mission_goals.size(); i++) {
-    std::string robot_name = mission_goals.at(i).name;
-    auto points            = mission_goals.at(i).points;
-    int frame_id           = mission_goals.at(i).frame_id;
-    int height_id          = mission_goals.at(i).height_id;
+
+  auto robot_goals = mission_goal.robot_goals;
+
+  for (size_t i = 0; i < robot_goals.size(); i++) {
+    std::string robot_name = robot_goals.at(i).name;
+    auto points            = robot_goals.at(i).points;
+    int frame_id           = robot_goals.at(i).frame_id;
+    int height_id          = robot_goals.at(i).height_id;
 
     // Extract the points
     json points_list = json::list();
@@ -1056,7 +1062,7 @@ json missionGoalToJson(std::vector<iroc_mission_handler::MissionGoal> &mission_g
     robots_data[i]  = std::move(robot_data);
   }
 
-  json response = {{"success", true}, {"message", "Mission uploaded successfully"}, {"robot_data", robots_data}};
+  json response = {{"success", true}, {"message", "Mission uploaded successfully"}, {"type", mission_goal.type}, {"uuid", mission_goal.uuid}, {"robot_data", robots_data}};
 
   return response;
 }
@@ -1237,7 +1243,6 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
   int height_id                          = json_msg["height_id"].i();
   int max_z                              = json_msg["max_z"].i();
   int min_z                              = json_msg["min_z"].i();
-  bool keep_obstacles                    = json_msg["keep_obstacles"].b();
   std::vector<crow::json::rvalue> points = json_msg["points"].lo();
 
   std::string horizontal_frame = "latlon_origin";
@@ -1287,7 +1292,7 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
   // check that all robot names are valid and find the corresponding robot handlers
   mrs_msgs::SetSafetyBorderSrvRequest service_request;
   service_request.safety_border  = safety_border;
-  service_request.keep_obstacles = keep_obstacles;
+  service_request.keep_obstacles = false;
   mrs_msgs::SetSafetyBorderSrv::Request req_srv = service_request;
 
   const auto result = commandAction<mrs_msgs::SetSafetyBorderSrv>(robot_names, "set_safety_border", req_srv);
@@ -1495,6 +1500,36 @@ crow::response IROCBridge::getObstaclesCallback(const crow::request &req) {
 }
 //}
 
+/* getMissionCallback() method //{ */
+
+/**
+ * \brief Callback to get the loaded mission. 
+ *
+ * \param req Crow request
+ * \return res Crow response
+ */
+crow::response IROCBridge::getMissionCallback(const crow::request &req) {
+
+  ROS_INFO_STREAM("[IROCBridge]: Processing a getMissionCallback message ROS -> JSON.");
+  iroc_fleet_manager::GetMissionPointsSrv get_mission_points_service;
+  const auto resp =
+      callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_points_, get_mission_points_service.request, get_mission_points_service.response);
+
+  if (!resp.success) {
+    json error_response;
+    error_response["message"]    = resp.message;
+    error_response["success"]    = false;
+    error_response["robot_data"] = json::list();
+    ROS_WARN_STREAM("[IROCBridge]: " << error_response["message"].dump());
+    return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
+  }
+
+  auto mission_goal = get_mission_points_service.response.mission_goal;
+  auto json         = missionGoalToJson(mission_goal);
+  return crow::response(crow::status::OK, json.dump());
+}
+//}
+
 /* missionCallback() method //{ */
 
 /**
@@ -1525,12 +1560,14 @@ crow::response IROCBridge::missionCallback(const crow::request &req) {
     // Send the action goal to the fleet manager
     FleetManagerGoal action_goal;
     std::string type = json_msg["type"].s();
+    std::string uuid = json_msg["uuid"].s();
 
     // Convert rvalue to wvalue, then dump to string
     crow::json::wvalue details_wvalue(json_msg["details"]);
     std::string details = details_wvalue.dump();
 
     action_goal.type    = type;
+    action_goal.uuid    = uuid;
     action_goal.details = details;
 
     fleet_manager_action_client_->sendGoal(
@@ -1563,7 +1600,7 @@ crow::response IROCBridge::missionCallback(const crow::request &req) {
       return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
     }
 
-    auto mission_goal = get_mission_points_service.response.mission_robots;
+    auto mission_goal = get_mission_points_service.response.mission_goal;
     auto json = missionGoalToJson(mission_goal);
     return crow::response(crow::status::CREATED, json.dump());
   }

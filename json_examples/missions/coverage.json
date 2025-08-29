@@ -1,10 +1,8 @@
 {
   "type": "CoveragePlanner",
+  "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
   "details": {
-    "robots": [
-      "uav1",
-      "uav2"
-    ],
+    "robots": ["uav1", "uav2"],
     "search_area": [
       {
         "x": 47.397978,
