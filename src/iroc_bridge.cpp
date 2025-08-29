@@ -172,7 +172,7 @@ class IROCBridge : public nodelet::Nodelet {
   ros::ServiceClient sc_get_world_origin_;
   ros::ServiceClient sc_get_safety_border_;
   ros::ServiceClient sc_get_obstacles_;
-  ros::ServiceClient sc_get_mission_points_;
+  ros::ServiceClient sc_get_mission_data_;
 
   // | ----------------- action client callbacks ---------------- |
 
@@ -476,9 +476,9 @@ void IROCBridge::onInit() {
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_obstacles\' -> \'%s\'",
            sc_get_obstacles_.getService().c_str());
 
-  sc_get_mission_points_ = nh_.serviceClient<iroc_fleet_manager::GetMissionPointsSrv>(nh_.resolveName("svc/get_mission_points"));
-  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_mission_points\' -> \'%s\'",
-           sc_get_mission_points_.getService().c_str());
+  sc_get_mission_data_ = nh_.serviceClient<iroc_fleet_manager::GetMissionPointsSrv>(nh_.resolveName("svc/get_mission_data"));
+  ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/get_mission_data\' -> \'%s\'",
+           sc_get_mission_data_.getService().c_str());
 
   /* // | --------------------- action clients --------------------- | */
 
@@ -1511,9 +1511,9 @@ crow::response IROCBridge::getObstaclesCallback(const crow::request &req) {
 crow::response IROCBridge::getMissionCallback(const crow::request &req) {
 
   ROS_INFO_STREAM("[IROCBridge]: Processing a getMissionCallback message ROS -> JSON.");
-  iroc_fleet_manager::GetMissionPointsSrv get_mission_points_service;
+  iroc_fleet_manager::GetMissionPointsSrv get_mission_data_service;
   const auto resp =
-      callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_points_, get_mission_points_service.request, get_mission_points_service.response);
+      callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_data_, get_mission_data_service.request, get_mission_data_service.response);
 
   if (!resp.success) {
     json error_response;
@@ -1524,7 +1524,7 @@ crow::response IROCBridge::getMissionCallback(const crow::request &req) {
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
   }
 
-  auto mission_goal = get_mission_points_service.response.mission_goal;
+  auto mission_goal = get_mission_data_service.response.mission_goal;
   auto json         = missionGoalToJson(mission_goal);
   return crow::response(crow::status::OK, json.dump());
 }
@@ -1587,9 +1587,9 @@ crow::response IROCBridge::missionCallback(const crow::request &req) {
     }
 
     // TODO to replace with proper action response in ROS2
-    iroc_fleet_manager::GetMissionPointsSrv get_mission_points_service;
+    iroc_fleet_manager::GetMissionPointsSrv get_mission_data_service;
     const auto resp =
-        callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_points_, get_mission_points_service.request, get_mission_points_service.response);
+        callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_data_, get_mission_data_service.request, get_mission_data_service.response);
 
     if (!resp.success) {
       json error_response;
@@ -1600,7 +1600,7 @@ crow::response IROCBridge::missionCallback(const crow::request &req) {
       return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
     }
 
-    auto mission_goal = get_mission_points_service.response.mission_goal;
+    auto mission_goal = get_mission_data_service.response.mission_goal;
     auto json = missionGoalToJson(mission_goal);
     return crow::response(crow::status::CREATED, json.dump());
   }
