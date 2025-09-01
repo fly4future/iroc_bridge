@@ -1309,6 +1309,21 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request& req) {
  * \param req Crow request
  * \return res Crow response
  */
+
+int getFrameID(const std::string frame) {
+  std::map<std::string, int> height_id_map = {
+      {"world_origin", 0},
+      {"latlon_origin", 1},
+  };
+
+  int id;
+  auto it = height_id_map.find(frame);
+  if (it != height_id_map.end())
+    id = it->second;
+
+  return id;
+}
+
 crow::response IROCBridge::getSafetyBorderCallback(const crow::request &req) {
 
   ROS_INFO_STREAM("[IROCBridge]: Processing a getSafetyBorderCallback message ROS -> JSON.");
@@ -1337,7 +1352,12 @@ crow::response IROCBridge::getSafetyBorderCallback(const crow::request &req) {
       points[i] = std::move(point_json);
     }
 
-    json json_msg = {{"message", "All robots in the fleet with the same safety border"}, {"points", points}, {"max_z", max_z}, {"min_z", min_z}};
+    json json_msg = {{"message", "All robots in the fleet with the same safety border"},
+                     {"points", points},
+                     {"max_z", max_z},
+                     {"min_z", min_z},
+                     {"frame_id", getFrameID(horizontal_frame)},
+                     {"height_id", getFrameID(vertical_frame)}};
     return crow::response(crow::status::ACCEPTED, json_msg.dump());
   }
 }
@@ -1490,7 +1510,11 @@ crow::response IROCBridge::getObstaclesCallback(const crow::request &req) {
         }
       }
 
-      json obstacle_json = {{"points", points_list},{"max_z", max_z}, {"min_z", min_z}};
+      json obstacle_json     = {{"points", points_list},
+                                {"max_z", max_z},
+                                {"min_z", min_z},
+                                {"frame_id", getFrameID(obstacles.horizontal_frame)},
+                                {"height_id", getFrameID(obstacles.vertical_frame)}};
       obstacles_json_list[i] = std::move(obstacle_json);
     }
 

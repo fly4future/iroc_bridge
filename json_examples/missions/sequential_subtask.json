@@ -1,5 +1,6 @@
 {
   "type": "WaypointPlanner",
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
   "details": {
     "robots": [
       {
@@ -26,7 +27,7 @@
             "heading": 3,
             "subtasks": [
               {
-                "type": "test",
+                "type": "gazebo_gimbal",
                 "parameters": [
                   0.5,
                   0.5,
