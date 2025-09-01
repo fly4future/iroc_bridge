@@ -1,8 +1,9 @@
-main_timer_rate: 100.0 # [Hz]
-no_message_timeout: 5.0 # [s]
-http_server_threads: 8
+iroc_bridge: 
+  main_timer_rate: 100.0 # [Hz]
+  no_message_timeout: 5.0 # [s]
+  http_server_threads: 8
 
-remote_control_limits:
-  max_linear_speed: 1.0 # [m/s]
-  max_heading_rate: 0.8 # [rad/s]
+  remote_control_limits:
+    max_linear_speed: 1.0 # [m/s]
+    max_heading_rate: 0.8 # [rad/s]
 

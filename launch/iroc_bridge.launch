@@ -3,15 +3,14 @@
   <!-- defines name of the namespace -->
   <arg name="GS_NS" default="$(optenv GS_NS gs)" />
 
-  <arg name="custom_config" default="" />
-
   <arg name="url" default="127.0.0.1" />
   <arg name="server_port" default="8080" />
   <arg name="client_port" default="8000" />
 
   <!-- config files -->
   <arg name="network_config" default="$(optenv NETWORK_CONFIG)" />
-
+  <arg name="custom_config" default="" />
+  
   <!-- will it run using GNU debugger? -->
   <arg name="DEBUG" default="false" />
   <arg unless="$(arg DEBUG)" name="launch_prefix_debug" value=""/>
@@ -31,13 +30,11 @@
     <node pkg="nodelet" type="nodelet" name="iroc_bridge" args="$(arg nodelet) iroc_bridge/IROCBridge $(arg nodelet_manager)" launch-prefix="$(arg launch_prefix_debug)" output="screen">
 
       <param name="config" value="$(find iroc_bridge)/config/config.yaml" />
+      <param name="network_config" value="$(arg network_config)" />
+
       <param name="url" value="$(arg url)" />
       <param name="server_port" value="$(arg server_port)" />
       <param name="client_port" value="$(arg client_port)" />
-
-      <param if="$(eval arg('network_config') == '')" name="network_config" value="" />
-      <param if="$(eval not arg('network_config') == '' and arg('network_config')[0] == '/')" name="network_config" value="$(arg network_config)" />
-      <param if="$(eval not arg('network_config') == '' and not arg('network_config')[0] == '/')" name="network_config" value="$(env PWD)/$(arg network_config)" />
 
       <param if="$(eval arg('custom_config') == '')" name="custom_config" value="" />
       <param if="$(eval not arg('custom_config') == '' and arg('custom_config')[0] == '/')" name="custom_config" value="$(arg custom_config)" />
@@ -67,14 +64,13 @@
       <remap from="~svc/velocity_reference" to="/control_manager/velocity_reference" />
 
       <!-- Services -->
-      <remap from="~ac/waypoint_mission" to="iroc_fleet_manager" />
-      <remap from="~ac/coverage_mission" to="iroc_coverage_planner" />
-      <remap from="~ac/autonomy_test" to="iroc_autonomy_test" />
+      <remap from="~ac/mission" to="iroc_fleet_manager" />
       <remap from="~svc/change_fleet_mission_state" to="iroc_fleet_manager/change_fleet_mission_state" />
       <remap from="~svc/change_robot_mission_state" to="iroc_fleet_manager/change_robot_mission_state" />
-      <remap from="~svc/change_coverage_mission_state" to="iroc_coverage_planner/change_fleet_mission_state" />
-      <remap from="~svc/change_coverage_mission_robot_state" to="iroc_coverage_planner/change_robot_mission_state" />
-      <remap from="~svc/change_autonomy_test_state" to="iroc_autonomy_test/change_robot_mission_state" />
+      <remap from="~svc/get_world_origin" to="iroc_fleet_manager/get_world_origin" />
+      <remap from="~svc/get_safety_border" to="iroc_fleet_manager/get_safety_border" />
+      <remap from="~svc/get_obstacles" to="iroc_fleet_manager/get_obstacles" />
+      <remap from="~svc/get_mission_data" to="iroc_fleet_manager/get_mission_data" />
     </node>
 
   </group>
