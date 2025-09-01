@@ -7,7 +7,7 @@
       "points": [
         { "x": 20, "y": 10, "z": 3, "heading": 1 },
         { "x": 20, "y": 10, "z": 3, "heading": 3 },
-        { "x": -20, "y": -20, "z": 4, "heading": 3, "subtasks": [{ "type": 1, "parameters": "[0.5,0.5,0.5]" }] },
+        { "x": -20, "y": -20, "z": 4, "heading": 3, "subtasks": [{ "type": 0, "parameters": "5.6" }] },
         { "x": -10, "y": 10, "z": 5, "heading": 3 },
         { "x": 10, "y": -10, "z": 4, "heading": 3, "subtasks": [{ "type": 0, "parameters": "5.6" }] },
         { "x": 20, "y": 10, "z": 3, "heading": 1 }
