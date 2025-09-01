@@ -13,7 +13,8 @@ set(CATKIN_DEPENDENCIES
   mrs_msgs
   mrs_robot_diagnostics
   mrs_lib
-  mrs_mission_manager
+  iroc_mission_handler
+  iroc_fleet_manager 
   actionlib
   )
 
@@ -33,7 +34,6 @@ catkin_package(
 include_directories(
   INCLUDE_DIRS include
   ${catkin_INCLUDE_DIRS}
-  include
   )
 
 # IROCBridge
@@ -41,7 +41,6 @@ include_directories(
 ## Declare a C++ library
 add_library(IROCBridge
   src/iroc_bridge.cpp
-  src/json_var_parser.cpp
   )
 
 add_dependencies(IROCBridge

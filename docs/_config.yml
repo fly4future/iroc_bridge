@@ -1,0 +1,14 @@
+title: IROC bridge
+description: Signaling protocol specification
+markdown: GFM
+remote_theme: jekyll/minima@master
+highlighter: rouge
+minima:
+  skin: "auto"
+  hide_site_feed_link: true
+  social_links:
+    - title: GitHub
+      icon: github
+      url: "https://github.com/fly4future/iroc_bridge"
+titles_from_headings:
+  strip_title: true # Remove double title
