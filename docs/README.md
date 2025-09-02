@@ -8,6 +8,7 @@ Designed to communicate between the web client and ROS.
 You can use the HTTP API to send requests to interact with the robots and receive status information.
 The requests and responses are in JSON format.
 
+---
 ### Robot control
 
 Endpoints for controlling the robots.
@@ -57,6 +58,8 @@ Endpoints for controlling the robots.
   <span style="color: gray">
   Land home all robots
   </span>
+
+---
 
 ### Environment setup
 
@@ -406,6 +409,8 @@ You will receive a Status code **409 Conflict**, and a message to let the user k
 {"message": "Call was not successful with message: Discrepancy in the borders between the fleet, please set the safety borders!"}
 ```
 
+---
+
 ## Missions
 
 The missions are handled by `IROC Fleet Manager`: a node responsible for sending the mission to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
@@ -562,7 +567,8 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   ```
 
   </details>
-
+  
+---
 
 ### Mission Response Examples
 
@@ -708,7 +714,7 @@ The result follows the following structure:
  
 </details>
 
-
+---
 
 ### Mission `GET` endpoint
 
@@ -797,7 +803,7 @@ If there is no active mission, you will get an unsuccessful response, with the m
 }
 ```
 
-
+---
 
 ### Mission Control Endpoints
 
@@ -848,7 +854,7 @@ You can also control individual mission robots using these endpoints:
   </span>
   > **NOTE** \
   > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
-
+---
 ### Feedback
 
 During an active mission, the feedback message is broadcast to the connected clients through a WebSocket in the `/telemetry` path.
@@ -898,6 +904,8 @@ During an active mission, the feedback message is broadcast to the connected cli
 > **NOTE** \
 > Autonomy test follows the same structure as the waypoint mission feedback, but it will always contain only one robot.
 
+---
+
 ### Result
 
 When a mission is finished, the result message will be sent to
@@ -934,8 +942,9 @@ Send the result of the mission.
 
 </details>
 
+---
 
-### Subtasks
+## Subtasks
 On the  Waypoint missions, you can send a list of subtasks that will be executed by the robot when it reaches a waypoint. You just need to add a new field called `subtasks` in the waypoint message, which is an array of subtasks. Requests are retro-compatible, so you can use the feature without changing the existing missions or additional fields.
 
 There are two types of subtasks supported: `wait` and `gazebo_gimbal` (for simulation), but they can be extended in the future due to the ROS `plugin` architecture in `iroc_mission_handler`.
@@ -978,9 +987,10 @@ It receives an array of three floating-point numbers representing the camera ori
 }
 ```
 
-The subtask system allows you to define complex behaviors that are executed when a robot reaches a waypoint.
+---
 
 ### Waypoint Structure
+The subtask system allows you to define complex behaviors that are executed when a robot reaches a waypoint.
 
 Each waypoint now supports the following structure:
 
@@ -999,6 +1009,8 @@ Each waypoint now supports the following structure:
 - **Default**: `false` (sequential execution)
 - **When `true`**: Subtasks are executed simultaneously
 - **When `false`**: Subtasks are executed one after another (sequentially)
+
+---
 
 ### Subtask Configuration
 
@@ -1125,6 +1137,7 @@ These are the fundamental fields for configuring a subtask:
 
 </details>
 
+---
 
 ## WebSocket API
 
@@ -1375,6 +1388,8 @@ You can use the WebSocket API to control the robots in the `/rc` path.
   ```
 
   </details>
+
+---
 
 ## Camera stream using WebRTC
 
