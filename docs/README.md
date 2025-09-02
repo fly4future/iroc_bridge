@@ -74,7 +74,7 @@ Endpoints for controlling the robot's environment.
 </figure>
 
 - <strong style="color: #49cc90">`POST`</strong>
-  **/safety-area/origin**  
+  **/safety-area/world-origin**  
   <span style="color: gray">
   Set the world origin.
   </span>
@@ -96,7 +96,7 @@ Endpoints for controlling the robot's environment.
   </details>
 
 - <strong style="color: #61affe">`GET`</strong>
-  **/safety-area/origin**  
+  **/safety-area/world-origin**  
   <span style="color: gray">
   Retrieve the world origin.
   </span>
@@ -108,9 +108,14 @@ Endpoints for controlling the robot's environment.
   </summary>
  
   Status code: **202 Accepted**
- 
   ```json
+  {
+  "frame_id": 0, 
+  "x": 47.397978,
+  "y": 8.545299 
+  }
   ```
+ 
   </details>
  
  - <strong style="color: #49cc90">`POST`</strong>
@@ -209,28 +214,78 @@ Endpoints for controlling the robot's environment.
     </summary>
 
   ```json
-  {
-    "points": [
-      {
-        "x": 47.39776,
-        "y": 8.545254
-      },
-      {
-        "x": 47.397719,
-        "y": 8.545436
-      },
-      {
-        "x": 47.397601,
-        "y": 8.545367
-      },
-      {
-        "x": 47.397657,
-        "y": 8.545191
-      }
-    ],
-    "height_id": 1,
-    "max_z": 347,
-    "min_z": 343
+   {
+    "obstacles":[
+       {
+          "points":[
+             {
+                "x":47.39776,
+                "y":8.545254
+             },
+             {
+                "x":47.397719,
+                "y":8.545436
+             },
+             {
+                "x":47.397601,
+                "y":8.545367
+             },
+             {
+                "x":47.397657,
+                "y":8.545191
+             }
+          ],
+          "height_id":1,
+          "max_z":347,
+          "min_z":343
+       },
+       {
+          "points":[
+             {
+                "x":47.397900,
+                "y":8.545800
+             },
+             {
+                "x":47.397855,
+                "y":8.545950
+             },
+             {
+                "x":47.397750,
+                "y":8.545890
+             },
+             {
+                "x":47.397795,
+                "y":8.545740
+             }
+          ],
+          "height_id":1,
+          "max_z":350,
+          "min_z":345
+       },
+       {
+          "points":[
+             {
+                "x":47.398100,
+                "y":8.545100
+             },
+             {
+                "x":47.398050,
+                "y":8.545250
+             },
+             {
+                "x":47.397950,
+                "y":8.545200
+             },
+             {
+                "x":47.398000,
+                "y":8.545050
+             }
+          ],
+          "height_id":1,
+          "max_z":352,
+          "min_z":348
+       }
+    ]
   }
   ```
 
@@ -351,7 +406,7 @@ You will receive a Status code **409 Conflict**, and a message to let the user k
 {"message": "Call was not successful with message: Discrepancy in the borders between the fleet, please set the safety borders!"}
 ```
 
-### Missions
+## Missions
 
 The missions are handled by `IROC Fleet Manager`: a node responsible for sending the mission to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
 - <strong style="color: #49cc90">`POST`</strong>
@@ -362,8 +417,8 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   
 <figure align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="img/sequence_diagram_dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="img/sequence_diagram.svg" />
+    <source media="(prefers-color-scheme: dark)" srcset="img/mission_diagram_dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="img/mission_diagram.svg" />
     <img src="img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;"> 
   </picture>
   <figcaption>Mission Sequence Diagram</figcaption>
@@ -507,7 +562,8 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   ```
 
   </details>
-  
+
+
 ### Mission Response Examples
 
 The result follows the following structure:
@@ -589,7 +645,7 @@ The result follows the following structure:
   
   </details>
 
-2. Uploading mission failure due to safety area validation.
+2. Uploading mission failure due to safety validation.
 <details>
  
   <summary>
@@ -601,20 +657,34 @@ The result follows the following structure:
 
 ```json
 {
-   "message":"Failure starting robot clients.",
-   "success":false,
-   "robot_results":[
+   "robot_data":[
       {
-         "robot_name":"uav1",
-         "success":true,
-         "message":"Mission on robot: uav1 was successfully processed"
-      },
-      {
-         "message":"Unvalid trajectory for uav2, trajectory is outside of safety area",
+         "message":"The given points are valid for: uav1, however the generated trajectory seems to be outside of safety area or within an obstacle.",
+         "mission":[
+            
+         ],
          "success":false,
-         "robot_name":"uav2"
+         "robot":"uav1"
       }
-   ]
+   ],
+   "message":"Failure starting robot clients.",
+   "success":false
+}
+```
+```json
+{
+   "robot_data":[
+      {
+         "message":"Unvalid trajectory for uav1, trajectory is outside of safety area",
+         "mission":[
+            
+         ],
+         "success":false,
+         "robot":"uav1"
+      }
+   ],
+   "message":"Failure starting robot clients.",
+   "success":false
 }
 ```
  
@@ -637,6 +707,8 @@ The result follows the following structure:
 ```
  
 </details>
+
+
 
 ### Mission `GET` endpoint
 
@@ -725,11 +797,13 @@ If there is no active mission, you will get an unsuccessful response, with the m
 }
 ```
 
+
+
 ### Mission Control Endpoints
 
 We support both fleet-wide and individual robot mission control.
 
-#### Fleet Mission Control:
+**Fleet Mission Control**:
 
 These endpoints control the mission status for all assigned robots at once: \
 
@@ -749,7 +823,7 @@ These endpoints control the mission status for all assigned robots at once: \
   Stop the mission for all robots.
   </span>
 
-#### Robot Mission Control:
+**Robot Mission Control**:
 
 You can also control individual mission robots using these endpoints:
 
@@ -859,6 +933,198 @@ Send the result of the mission.
 ```
 
 </details>
+
+
+### Subtasks
+On the  Waypoint missions, you can send a list of subtasks that will be executed by the robot when it reaches a waypoint. You just need to add a new field called `subtasks` in the waypoint message, which is an array of subtasks. Requests are retro-compatible, so you can use the feature without changing the existing missions or additional fields.
+
+There are two types of subtasks supported: `wait` and `gazebo_gimbal` (for simulation), but they can be extended in the future due to the ROS `plugin` architecture in `iroc_mission_handler`.
+
+---
+
+### `wait` - Temporal Delay
+
+Introduces a pause in mission execution for a specified duration.
+
+#### Parameters
+
+It receives a floating-point number representing the duration in seconds.
+
+#### Usage Example
+
+```json
+{
+  "type": "wait",
+  "parameters": 5.0
+}
+```
+
+---
+
+### `gazebo_gimbal` - Camera Orientation Control
+
+Controls the gimbal system to orient the camera towards specific angles.
+
+#### Parameters
+
+It receives an array of three floating-point numbers representing the camera orientation angles in radians (`roll`, `pitch`, `yaw`)
+
+#### Usage Example
+
+```json
+{
+  "type": "gazebo_gimbal",
+  "parameters": [1.0, 0.5, 0.0]
+}
+```
+
+The subtask system allows you to define complex behaviors that are executed when a robot reaches a waypoint.
+
+### Waypoint Structure
+
+Each waypoint now supports the following structure:
+
+```json
+{
+  // Standard `x`, `y` and `z` data
+  "subtasks": [
+    // Array of subtask objects
+  ],
+  "parallel_execution": false // Optional: Whether subtasks can be executed in parallel
+}
+```
+
+#### Parallel Execution
+
+- **Default**: `false` (sequential execution)
+- **When `true`**: Subtasks are executed simultaneously
+- **When `false`**: Subtasks are executed one after another (sequentially)
+
+### Subtask Configuration
+
+Each subtask supports advanced execution control through the following fields:
+
+#### Basic Fields
+
+These are the fundamental fields for configuring a subtask:
+
+- `type`: Type of task to execute
+- `parameters`: Task-specific parameters (string format)
+
+#### Advanced Execution Control
+
+- `continue_without_waiting`: If `true`, the mission continues without waiting for this subtask to complete
+- `stop_on_failure`: If `true`, the entire mission stops if this task fails
+- `max_retries`: Maximum number of retry attempts if the task fails (0 = no retries)
+- `retry_delay`: Delay in seconds before retrying a failed task
+
+#### Example Subtask Structure
+
+```json
+{
+  "type": "wait",
+  "parameters": "5.0",
+  "continue_without_waiting": false,
+  "stop_on_failure": true,
+  "max_retries": 3,
+  "retry_delay": 2.0
+}
+```
+
+#### Mission with multiple subtasks example:
+<details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+```json
+{
+  "type": "WaypointPlanner",
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "details": {
+    "robots": [
+      {
+        "name": "uav1",
+        "frame_id": 0,
+        "height_id": 0,
+        "points": [
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 1
+          },
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 3
+          },
+          {
+            "x": -20,
+            "y": -20,
+            "z": 4,
+            "heading": 3,
+            "subtasks": [
+              {
+                "type": "gazebo_gimbal",
+                "parameters": [
+                  0.5,
+                  0.5,
+                  0.5
+                ],
+                "continue_without_waiting": false,
+                "stop_on_failure": false,
+                "max_retries": 1,
+                "retry_delay": 0
+              },
+              {
+                "type": "wait",
+                "parameters": 5.6
+              }
+            ],
+            "parallel_execution": true
+          },
+          {
+            "x": -10,
+            "y": 10,
+            "z": 5,
+            "heading": 3
+          },
+          {
+            "x": 10,
+            "y": -10,
+            "z": 4,
+            "heading": 3,
+            "subtasks": [
+              {
+                "type": "wait",
+                "parameters": 5.6
+              }
+            ]
+          },
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 1,
+            "subtasks": [
+              {
+                "type": "wait",
+                "parameters": 5.6
+              }
+            ]
+          }
+        ],
+        "terminal_action": 0
+      }
+    ]
+  }
+}
+```
+
+</details>
+
 
 ## WebSocket API
 
