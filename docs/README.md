@@ -95,42 +95,107 @@ Endpoints for controlling the robot's environment.
 
   </details>
 
-- <strong style="color: #49cc90">`POST`</strong>
-  **/safety-area/borders**  
+- <strong style="color: #61affe">`GET`</strong>
+  **/safety-area/origin**  
   <span style="color: gray">
-  Set the safety area borders.
+  Retrieve the world origin.
   </span>
-  <details> 
+  
+  
+  <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
+ 
+  Status code: **202 Accepted**
+ 
+  ```json
+  ```
+  </details>
+ 
+ - <strong style="color: #49cc90">`POST`</strong>
+   **/safety-area/borders**  
+   <span style="color: gray">
+   Set the safety area borders.
+   </span>
+   <details> 
+   <summary>
+   <em>Body</em> <span style="color: gray">raw (json)</span>
+   </summary>
+ 
+   ```json
+   {
+     "points": [
+       {
+         "x": 47.39776,
+         "y": 8.545254
+       },
+       {
+         "x": 47.397719,
+         "y": 8.545436
+       },
+       {
+         "x": 47.397601,
+         "y": 8.545367
+       },
+       {
+         "x": 47.397657,
+         "y": 8.545191
+       }
+     ],
+     "height_id": 1,
+     "max_z": 347,
+     "min_z": 343
+   }
+   ```
 
+   </details>
+
+- <strong style="color: #61affe">`GET`</strong>
+  **/safety-area/borders**  
+  <span style="color: gray">
+  Retrieve the safety border.
+  </span>
+  
+  
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+ 
+  Status code: **202 Accepted**
+ 
   ```json
   {
-    "points": [
+   "frame_id":1,
+   "min_z":0,
+   "points":[
       {
-        "x": 47.39776,
-        "y": 8.545254
+         "x":47.398283001578619178,
+         "y":8.54231999998631863491
       },
       {
-        "x": 47.397719,
-        "y": 8.545436
+         "y":8.5464419999864418287,
+         "x":47.3979670015785998771
       },
       {
-        "x": 47.397601,
-        "y": 8.545367
+         "x":47.3972980015784983721,
+         "y":8.54602099998643183199
       },
       {
-        "x": 47.397657,
-        "y": 8.545191
+         "x":47.3975810015785512519,
+         "y":8.5447099999863915798
+      },
+      {
+         "y":8.54231999998631863491,
+         "x":47.398283001578619178
       }
-    ],
-    "height_id": 1,
-    "max_z": 347,
-    "min_z": 343
+   ],
+   "height_id":0,
+   "max_z":15,
+   "message":"All robots in the fleet with the same safety border"
   }
   ```
-
   </details>
 
 - <strong style="color: #49cc90">`POST`</strong>
@@ -171,10 +236,130 @@ Endpoints for controlling the robot's environment.
 
   </details>
 
+- <strong style="color: #61affe">`GET`</strong>
+  **/safety-area/obstacles**  
+  <span style="color: gray">
+  Retrieve the obstacles.
+  </span>
+  
+  
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+ 
+  Status code: **202 Accepted**
+ 
+  ```json
+  {
+   "obstacles":[
+      {
+         "height_id":0,
+         "max_z":7.05999999660582489014,
+         "frame_id":1,
+         "min_z":3.05999999660582489014,
+         "points":[
+            {
+               "x":47.3977600015785611731,
+               "y":8.54525399998640722288
+            },
+            {
+               "y":8.54543599998641312254,
+               "x":47.3977190015785652122
+            },
+            {
+               "x":47.3976010015785576002,
+               "y":8.54536699998641147147
+            },
+            {
+               "x":47.3976570015785512169,
+               "y":8.54519099998640641047
+            },
+            {
+               "y":8.54525399998640722288,
+               "x":47.3977600015785611731
+            }
+         ]
+      },
+      {
+         "points":[
+            {
+               "y":8.54579999998642314551,
+               "x":47.3979000015785771893
+            },
+            {
+               "x":47.3978550015785771166,
+               "y":8.54594999998642634864
+            },
+            {
+               "y":8.54588999998642506739,
+               "x":47.3977500015785722098
+            },
+            {
+               "y":8.54573999998642364062,
+               "x":47.3977950015785864935
+            },
+            {
+               "x":47.3979000015785771893,
+               "y":8.54579999998642314551
+            }
+         ],
+         "min_z":5.05999999660582489014,
+         "frame_id":1,
+         "max_z":10.0599999966058248901,
+         "height_id":0
+      },
+      {
+         "height_id":0,
+         "max_z":12.0599999966058248901,
+         "frame_id":1,
+         "min_z":6.44836723768419848974e-31,
+         "points":[
+            {
+               "x":47.3981000015786122503,
+               "y":8.54509999998640168428
+            },
+            {
+               "y":8.54524999998640488741,
+               "x":47.3980500015786105905
+            },
+            {
+               "x":47.39795000157859306,
+               "y":8.54519999998640500394
+            },
+            {
+               "x":47.3980000015786018253,
+               "y":8.54504999998640002445
+            },
+            {
+               "y":8.54509999998640168428,
+               "x":47.3981000015786122503
+            }
+         ]
+      }
+   ],
+   "message":"All robots in the fleet with the same obstacles"
+  }
+  ```
+  </details>
+ 
+ > **NOTE** \
+ > In case of any discrepancy within the robot's safety border, obstacles & origin, having different values 
+You will receive a Status code **409 Conflict**, and a message to let the user know about the conflict: 
+
+```json
+{"message": "Call was not successful with message: Discrepancy in the borders between the fleet, please set the safety borders!"}
+```
+
 ### Missions
 
-The missions are handled by `IROC Fleet Manager`: node responsible of sending the mission to the robots, monitoring their progress and sending the aggregated information to the `IROC Bridge`.
-
+The missions are handled by `IROC Fleet Manager`: a node responsible for sending the mission to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
+- <strong style="color: #49cc90">`POST`</strong>
+  **/mission**  
+  <span style="color: gray">
+  Set a mission 
+  </span>
+  
 <figure align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="img/sequence_diagram_dark.svg" />
@@ -184,124 +369,225 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
   <figcaption>Mission Sequence Diagram</figcaption>
 </figure>
 
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/waypoints**  
-  <span style="color: gray">
-  Set the waypoints for the mission.
-  </span>
+ The mission request requires the following fields:
+ - **type key** to specify the mission type and the specific details of the mission.
+ - **details key** with the specific details for each mission.
+ - **Uuid key** for synchronization with the UI.
+
   <details>
   <summary>
-  <em>Body</em> <span style="color: gray">raw (json)</span>
+  <em> WaypointPlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
   ```json
   {
-  "mission": [
-    {
-      "robot_name": "uav1",
-      "frame_id": 0,
-      "height_id": 0,
-      "points": [
-        { "x": 10, "y": 10, "z": 2, "heading": 1 },
-        { "x": -10, "y": 10, "z": 2, "heading": 3 }
-      ],
-      "terminal_action": 0
-    },
-    {
-      "robot_name": "uav2",
-      "frame_id": 0,
-      "height_id": 0,
-      "points": [
-        { "x": 20, "y": 5, "z": 3, "heading": 0 }
-      ],
-      "terminal_action": 0
+   "type": "WaypointPlanner",
+   "uuid": "550e8400-e29b-41d4-a716-446655440000",
+   "details": {
+     "robots": [
+       {
+         "name": "uav1",
+         "frame_id": 0,
+         "height_id": 0,
+         "points": [
+           {
+             "x": 20,
+             "y": 10,
+             "z": 3,
+             "heading": 1
+           },
+           {
+             "x": 20,
+             "y": 10,
+             "z": 3,
+             "heading": 3
+           },
+           {
+             "x": -20,
+             "y": -20,
+             "z": 4,
+             "heading": 3,
+             "subtasks": [
+               {
+                 "type": "gazebo_gimbal",
+                 "parameters": [0.5, 0.5, 0.5]
+               }
+             ]
+           },
+           {
+             "x": -10,
+             "y": 10,
+             "z": 5,
+             "heading": 3
+           },
+           {
+             "x": 10,
+             "y": -10,
+             "z": 4,
+             "heading": 3,
+             "subtasks": [
+               {
+                 "type": "wait",
+                 "parameters": 5.6
+               }
+             ]
+           },
+           {
+             "x": 20,
+             "y": 10,
+             "z": 3,
+             "heading": 1
+           }
+         ],
+         "terminal_action": 0
+       }
+     ]
+   }
+  }
+  ```
+
+  </details>
+
+  <details>
+  <summary>
+  <em> Coverage Planner: Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+  ```json
+   {
+   "type": "CoveragePlanner",
+   "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
+   "details": {
+     "robots": ["uav1", "uav2"],
+     "search_area": [
+       {
+         "x": 47.397978,
+         "y": 8.545299
+       },
+       {
+         "x": 47.397848,
+         "y": 8.545872
+       },
+       {
+         "x": 47.397551,
+         "y": 8.54572
+       },
+       {
+         "x": 47.397699,
+         "y": 8.545129
+       }
+     ],
+     "height_id": 0,
+     "height": 5,
+     "terminal_action": 0
+   }
+  }
+  ```
+
+  </details>
+  
+  <details>
+  <summary>
+  <em> AutonomyTestPlanner: Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+  ```json
+  {
+    "type": "AutonomyTestPlanner",
+    "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
+    "details": {
+      "robots": [
+        {
+          "name": "uav1",
+          "segment_length": 5
+        }
+      ]
     }
-  ]
   }
   ```
 
   </details>
+  
+### Mission Response Examples
 
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/coverage**  
-  <span style="color: gray">
-  Set a coverage mission.
-  </span>
-  <details>
-  <summary>
-  <em>Body</em> <span style="color: gray">raw (json)</span>
-  </summary>
-
-  ```json
-  {
-  "robots": [
-    "uav1",
-    "uav2"
-  ], 
-  "search_area": [
-    {"x": 47.397978, "y": 8.545299},
-    {"x": 47.397848, "y": 8.545872},
-    {"x": 47.397551, "y": 8.545720},
-    {"x": 47.397699, "y": 8.545129}
-  ],
-  "height_id": 0,
-  "height": 10,
-  "terminal_action": 0
-  }
-  ```
-
-  </details>
-
-- <strong style="color: #49cc90">`POST`</strong>
-  **/mission/autonomy-test**  
-  <span style="color: gray">
-  Set the autonomy test mission.
-  </span>
-  <details>
-  <summary>
-  <em>Body</em> <span style="color: gray">raw (json)</span>
-  </summary>
-
-  ```json
-  {
-  "robot_name": "uav1",
-  "segment_length": 2 
-  }
-  ```
-
-  </details>
-#### Mission Response Examples
+The result follows the following structure:
+- **message**:  General message about the status of the mission.
+- **success**:  Boolean to denote if the mission was uploaded successfully.
+- **type**:  Type of the mission.
+- **uuid**:  The UUID of the mission.
+- **robot_data**:  An array with details for each robot in the mission.
+  - **robot**: String with the name of the robot.
+  - **message**:  Individual robot message.
+  - **success**:  Boolean to denote the individual result of the robot.
+  - **mission**:  The details of the mission that were loaded into the robot.
 
 1. Successful mission upload
-<details>
- 
-  <summary>
-  <em>Body</em> <span style="color: gray"> example response (json)</span>
-  </summary>
-- Code: 201 Created
-
-- Example value:
-
-```json
-{
-   "message":"Mission uploaded successfully",
-   "success":true,
-   "robot_results":[
-      {
-         "robot_name":"uav1",
-         "success":true,
-         "message":"Robot received the mission successfully"
-      },
-      {
-         "message":"Robot received the mission successfully",
-         "success":true,
-         "robot_name":"uav2"
-      }
-   ]
-}
-```
- 
-</details>
+   
+  <details>
+   <summary>
+   <em>Body</em> <span style="color: gray"> example response (json)</span>
+   </summary>
+  Code: 201 Created
+  
+   ```json
+   {
+    "robot_data":[
+       {
+          "message": "Mission loaded successfully",
+          "mission":{
+             "frame_id":0,
+             "height_id":0,
+             "points":[
+                {
+                   "x":20,
+                   "y":10,
+                   "heading":1,
+                   "z":3
+                },
+                {
+                   "z":3,
+                   "heading":3,
+                   "y":10,
+                   "x":20
+                },
+                {
+                   "x":-20,
+                   "y":-20,
+                   "heading":3,
+                   "z":4
+                },
+                {
+                   "x":-10,
+                   "y":10,
+                   "heading":3,
+                   "z":5
+                },
+                {
+                   "z":4,
+                   "heading":3,
+                   "y":-10,
+                   "x":10
+                },
+                {
+                   "z":3,
+                   "heading":1,
+                   "y":10,
+                   "x":20
+                }
+             ]
+          },
+          "success": true,
+          "robot" :"uav1"
+       }
+    ],
+    "uuid":"550e8400-e29b-41d4-a716-446655440000",
+    "type": "WaypointPlanner",
+    "message": "Mission uploaded successfully",
+    "success" :true
+   }
+   ```
+  
+  </details>
 
 2. Uploading mission failure due to safety area validation.
 <details>
@@ -346,17 +632,104 @@ The missions are handled by `IROC Fleet Manager`: node responsible of sending th
 
 ```json
 {
-  "message": "Mission is already running. Terminate the previous one, or wait until it is finished"
+  "message": "Mission is already running. Terminate the previous one, or wait until it is finished."
 }
 ```
  
 </details>
 
-#### Mission Control Endpoints
+### Mission `GET` endpoint
 
-We support for both fleet-wide and individual robot mission control.
+- <strong style="color: #61affe">`GET`</strong>
+  **/mission**  
+  <span style="color: gray">
+  Retrieve the  mission loaded in the server.
+  </span>
+  
+  
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+ 
+  Status code: **202 Accepted**
+ 
+  ```json
+  {
+     "robot_data":[
+        {
+           "message": "Mission loaded successfully",
+           "mission":{
+              "frame_id":0,
+              "height_id":0,
+              "points":[
+                 {
+                    "x":20,
+                    "y":10,
+                    "heading":1,
+                    "z":3
+                 },
+                 {
+                    "z":3,
+                    "heading":3,
+                    "y":10,
+                    "x":20
+                 },
+                 {
+                    "x":-20,
+                    "y":-20,
+                    "heading":3,
+                    "z":4
+                 },
+                 {
+                    "x":-10,
+                    "y":10,
+                    "heading":3,
+                    "z":5
+                 },
+                 {
+                    "z":4,
+                    "heading":3,
+                    "y":-10,
+                    "x":10
+                 },
+                 {
+                    "z":3,
+                    "heading":1,
+                    "y":10,
+                    "x":20
+                 }
+              ]
+           },
+           "success":true,
+           "robot":"uav1"
+        }
+     ],
+     "uuid":"550e8400-e29b-41d4-a716-446655440000",
+     "type":"WaypointPlanner",
+     "message":"Mission uploaded successfully",
+     "success":true
+  }
+  ```
+  </details>
 
-##### Fleet Mission Control:
+If there is no active mission, you will get an unsuccessful response, with the message that there is no active mission:
+
+```json
+{
+   "robot_data":[
+      
+   ],
+   "success": false,
+   "message" :"No active mission."
+}
+```
+
+### Mission Control Endpoints
+
+We support both fleet-wide and individual robot mission control.
+
+#### Fleet Mission Control:
 
 These endpoints control the mission status for all assigned robots at once: \
 
@@ -376,7 +749,7 @@ These endpoints control the mission status for all assigned robots at once: \
   Stop the mission for all robots.
   </span>
 
-##### Robot Mission Control:
+#### Robot Mission Control:
 
 You can also control individual mission robots using these endpoints:
 
@@ -387,7 +760,7 @@ You can also control individual mission robots using these endpoints:
   </span>
 
   > **NOTE** \
-  > Starting a mission for a single robot will activate that robot while the others remain in a waiting state. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
+  > Starting a mission for a single robot will activate that robot while the others remain waiting. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
 
 - <strong style="color: #49cc90">`POST`</strong>
   **/robots/{_robot_name_}/mission/pause**  
@@ -402,9 +775,9 @@ You can also control individual mission robots using these endpoints:
   > **NOTE** \
   > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
 
-#### Feedback
+### Feedback
 
-During an active mission, the feedback message is broadcasted to the connected clients through a WebSocket in the `/telemetry` path.
+During an active mission, the feedback message is broadcast to the connected clients through a WebSocket in the `/telemetry` path.
 
 - <strong style="color: orange">`onmessage`</strong>
   **Waypoint Mission and Autonomy Test Feedback.**
@@ -451,7 +824,7 @@ During an active mission, the feedback message is broadcasted to the connected c
 > **NOTE** \
 > Autonomy test follows the same structure as the waypoint mission feedback, but it will always contain only one robot.
 
-#### Result
+### Result
 
 When a mission is finished, the result message will be sent to
 
