@@ -460,6 +460,7 @@ void IROCBridge::onInit() {
     }
   }
 
+  shopts.no_message_timeout = mrs_lib::no_timeout;
   sch_fleet_manager_feedback_ =
       mrs_lib::SubscribeHandler<iroc_fleet_manager::IROCFleetManagerActionFeedback>(shopts, "in/fleet_manager_feedback");
 
@@ -1781,15 +1782,20 @@ crow::response IROCBridge::commandCallback(const crow::request& req, const std::
  * \return res Crow response
  */
 crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::request& req) {
-  std::vector<std::string> robot_names;
-  robot_names.reserve(robot_handlers_.handlers.size());
-  for (const auto &rh : robot_handlers_.handlers)
-    robot_names.push_back(rh.robot_name);
+  if (robot_handlers_.handlers.empty()) {
+    ROS_WARN_STREAM("[IROCBridge]: No robots available in the fleet.");
+    return crow::response(crow::status::NO_CONTENT, "{\"message\": \"No robots available in the fleet.\"}");
+  }
 
-  json json_msg;
-  json_msg["robot_names"] = robot_names;
-
-  return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  json robots = json::list();
+  for (size_t i = 0; i < robot_handlers_.handlers.size(); i++) {
+    if (!robot_handlers_.handlers[i].sh_general_robot_info.hasMsg()) {
+      ROS_WARN_STREAM("[IROCBridge]: Robot handler for robot " << robot_handlers_.handlers[i].robot_name << " does not have general robot info.");
+      return crow::response(crow::status::NO_CONTENT, "{\"message\": \"No robots available in the fleet.\"}");
+    }
+    robots[i] = {{"name", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_name},
+                 {"type", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_type}};
+  }
 }
 //}
 
