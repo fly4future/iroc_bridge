@@ -135,6 +135,9 @@ class IROCBridge : public nodelet::Nodelet {
 
   // | ---------------------- ROS subscribers --------------------- |
 
+  // Fleet manager feedback subscriber
+  mrs_lib::SubscribeHandler<iroc_fleet_manager::IROCFleetManagerActionFeedback> sch_fleet_manager_feedback_; 
+
   struct robot_handler_t {
     std::string robot_name;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::GeneralRobotInfo> sh_general_robot_info;
@@ -182,6 +185,7 @@ class IROCBridge : public nodelet::Nodelet {
   void missionDoneCallback(const SimpleClientGoalState& state, const boost::shared_ptr<const Result>& result);
   template <typename Feedback>
   void missionFeedbackCallback(const boost::shared_ptr<const Feedback>& feedback);
+  void missionFeedbackCallback(iroc_fleet_manager::IROCFleetManagerActionFeedback::ConstPtr msg);
 
   // | ------------------ Additional functions ------------------ |
 
@@ -456,6 +460,9 @@ void IROCBridge::onInit() {
     }
   }
 
+  sch_fleet_manager_feedback_ =
+      mrs_lib::SubscribeHandler<iroc_fleet_manager::IROCFleetManagerActionFeedback>(shopts, "in/fleet_manager_feedback");
+
   sc_change_fleet_mission_state_ = nh_.serviceClient<mrs_msgs::String>(nh_.resolveName("svc/change_fleet_mission_state"));
   ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc_server/change_fleet_mission_state\' -> \'%s\'",
            sc_change_fleet_mission_state_.getService().c_str());
@@ -534,6 +541,10 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 
     if (rh.sh_system_health_info.newMsg()) {
       parseSystemHealthInfo(rh.sh_system_health_info.getMsg(), robot_name);
+    }
+
+    if (sch_fleet_manager_feedback_.newMsg()) {
+      missionFeedbackCallback(sch_fleet_manager_feedback_.getMsg());
     }
   }
 }
@@ -622,6 +633,42 @@ void IROCBridge::missionFeedbackCallback(const boost::shared_ptr<const Feedback>
 
   // Create the main JSON message
   json json_msg = {{"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
+
+  sendTelemetryJsonMessage("MissionFeedback", json_msg);
+}
+
+void IROCBridge::missionFeedbackCallback(iroc_fleet_manager::IROCFleetManagerActionFeedback::ConstPtr msg) {
+  auto robot_feedbacks = msg->feedback.info.robot_feedbacks;
+
+  // Create a list for robot feedback
+  json json_msgs = json::list();
+
+  // Collect each robot feedback and create a json for each
+  for (size_t i = 0; i < robot_feedbacks.size(); i++) {
+    const auto& rfb = robot_feedbacks[i];
+
+    json robot_json = {{"robot_name", rfb.name},
+                       {"message", rfb.message},
+                       {"mission_progress", rfb.mission_progress},
+                       {"current_goal", rfb.goal_idx},
+                       {"distance_to_goal", rfb.distance_to_closest_goal},
+                       {"goal_estimated_arrival_time", rfb.goal_estimated_arrival_time},
+                       {"goal_progress", rfb.goal_progress},
+                       {"distance_to_finish", rfb.distance_to_finish},
+                       {"finish_estimated_arrival_time", rfb.finish_estimated_arrival_time}};
+
+    ROS_DEBUG_STREAM("[IROCBridge]: Mission feedback for robot: "
+                     << rfb.name << ", message: " << rfb.message << ", progress: " << rfb.mission_progress << ", current goal: " << rfb.goal_idx
+                     << ", distance to goal: " << rfb.distance_to_closest_goal << ", goal estimated arrival time: " << rfb.goal_estimated_arrival_time
+                     << ", goal progress: " << rfb.goal_progress << ", distance to finish: " << rfb.distance_to_finish
+                     << ", finish estimated arrival time: " << rfb.finish_estimated_arrival_time);
+
+    // Add to the list at index i
+    json_msgs[i] = std::move(robot_json);
+  }
+
+  // Create the main JSON message
+  json json_msg = {{"progress", msg->feedback.info.progress}, {"mission_state", msg->feedback.info.state}, {"message", msg->feedback.info.message}, {"robots", json_msgs}};
 
   sendTelemetryJsonMessage("MissionFeedback", json_msg);
 }
