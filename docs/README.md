@@ -18,6 +18,27 @@ Endpoints for controlling the robots.
   <span style="color: gray">
   List available robots.
   </span>
+
+  <details> 
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+   
+  ```json
+    [
+      {
+        "name": "uav1",
+        "type": 0
+      },
+      {
+        "name": "uav2",
+        "type": 0
+
+      }
+    ]
+  ```
+  </details>
+
 - <strong style="color: #48cc90">`POST`</strong>
   **/robots/{_robot_name_}/takeoff**  
   <span style="color: gray">
