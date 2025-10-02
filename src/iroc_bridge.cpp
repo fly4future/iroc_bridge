@@ -1796,6 +1796,7 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
     robots[i] = {{"name", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_name},
                  {"type", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_type}};
   }
+  return crow::response(crow::status::ACCEPTED, robots.dump());
 }
 //}
 
