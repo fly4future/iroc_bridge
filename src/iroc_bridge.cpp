@@ -1791,11 +1791,15 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
   for (size_t i = 0; i < robot_handlers_.handlers.size(); i++) {
     if (!robot_handlers_.handlers[i].sh_general_robot_info.hasMsg()) {
       ROS_WARN_STREAM("[IROCBridge]: Robot handler for robot " << robot_handlers_.handlers[i].robot_name << " does not have general robot info.");
-      return crow::response(crow::status::NO_CONTENT, "{\"message\": \"No robots available in the fleet.\"}");
+      continue;
     }
-    robots[i] = {{"name", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_name},
-                 {"type", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_type}};
+
+    robots[robots.size()] = {
+      {"name", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_name},
+      {"type", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_type}
+    };
   }
+
   return crow::response(crow::status::ACCEPTED, robots.dump());
 }
 //}
