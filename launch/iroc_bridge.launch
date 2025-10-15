@@ -50,6 +50,7 @@
       <remap from="~in/collision_avoidance_info" to="/state_monitor/collision_avoidance_info" />
       <remap from="~in/uav_info" to="/state_monitor/uav_info" />
       <remap from="~in/system_health_info" to="/state_monitor/system_health_info" />
+      <remap from="~in/sensor_info" to="/state_monitor/sensor_info" />
       <remap from="~in/fleet_manager_feedback" to="/gs/iroc_fleet_manager/feedback" />
       
 
