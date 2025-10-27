@@ -9,6 +9,7 @@ You can use the HTTP API to send requests to interact with the robots and receiv
 The requests and responses are in JSON format.
 
 ---
+
 ### Robot control
 
 Endpoints for controlling the robots.
@@ -35,9 +36,13 @@ Endpoints for controlling the robots.
         "type": 0
 
       }
-    ]
+
+  ]
+
   ```
   </details>
+
+  ```
 
 - <strong style="color: #48cc90">`POST`</strong>
   **/robots/{_robot_name_}/takeoff**  
@@ -85,9 +90,10 @@ Endpoints for controlling the robots.
 ### Environment setup
 
 Endpoints for controlling the robot's environment.
- > **NOTE** \
-  > Each step in this sequence depends on the successful completion of the previous step. Please ensure that you first initialize the origin, then the borders, and finally the obstacles, in that exact order.
-> 
+
+> **NOTE** \
+> Each step in this sequence depends on the successful completion of the previous step. Please ensure that you first initialize the origin, then the borders, and finally the obstacles, in that exact order.
+
 <figure align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="img/environment_sequence_dark.svg" />
@@ -124,107 +130,107 @@ Endpoints for controlling the robot's environment.
   <span style="color: gray">
   Retrieve the world origin.
   </span>
-  
-  
+
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
- 
+
   Status code: **202 Accepted**
+
   ```json
   {
-  "frame_id": 0, 
-  "x": 47.397978,
-  "y": 8.545299 
+    "frame_id": 0,
+    "x": 47.397978,
+    "y": 8.545299
   }
   ```
- 
-  </details>
- 
- - <strong style="color: #49cc90">`POST`</strong>
-   **/safety-area/borders**  
-   <span style="color: gray">
-   Set the safety area borders.
-   </span>
-   <details> 
-   <summary>
-   <em>Body</em> <span style="color: gray">raw (json)</span>
-   </summary>
- 
-   ```json
-   {
-     "points": [
-       {
-         "x": 47.39776,
-         "y": 8.545254
-       },
-       {
-         "x": 47.397719,
-         "y": 8.545436
-       },
-       {
-         "x": 47.397601,
-         "y": 8.545367
-       },
-       {
-         "x": 47.397657,
-         "y": 8.545191
-       }
-     ],
-     "height_id": 1,
-     "max_z": 347,
-     "min_z": 343
-   }
-   ```
 
-   </details>
+  </details>
+
+- <strong style="color: #49cc90">`POST`</strong>
+  **/safety-area/borders**  
+  <span style="color: gray">
+  Set the safety area borders.
+  </span>
+  <details> 
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+  ```json
+  {
+    "points": [
+      {
+        "x": 47.39776,
+        "y": 8.545254
+      },
+      {
+        "x": 47.397719,
+        "y": 8.545436
+      },
+      {
+        "x": 47.397601,
+        "y": 8.545367
+      },
+      {
+        "x": 47.397657,
+        "y": 8.545191
+      }
+    ],
+    "height_id": 1,
+    "max_z": 347,
+    "min_z": 343
+  }
+  ```
+
+  </details>
 
 - <strong style="color: #61affe">`GET`</strong>
   **/safety-area/borders**  
   <span style="color: gray">
   Retrieve the safety border.
   </span>
-  
-  
+
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
- 
+
   Status code: **202 Accepted**
- 
+
   ```json
   {
-   "frame_id":1,
-   "min_z":0,
-   "points":[
+    "frame_id": 1,
+    "min_z": 0,
+    "points": [
       {
-         "x":47.398283001578619178,
-         "y":8.54231999998631863491
+        "x": 47.398283001578619178,
+        "y": 8.54231999998631863491
       },
       {
-         "y":8.5464419999864418287,
-         "x":47.3979670015785998771
+        "y": 8.5464419999864418287,
+        "x": 47.3979670015785998771
       },
       {
-         "x":47.3972980015784983721,
-         "y":8.54602099998643183199
+        "x": 47.3972980015784983721,
+        "y": 8.54602099998643183199
       },
       {
-         "x":47.3975810015785512519,
-         "y":8.5447099999863915798
+        "x": 47.3975810015785512519,
+        "y": 8.5447099999863915798
       },
       {
-         "y":8.54231999998631863491,
-         "x":47.398283001578619178
+        "y": 8.54231999998631863491,
+        "x": 47.398283001578619178
       }
-   ],
-   "height_id":0,
-   "max_z":15,
-   "message":"All robots in the fleet with the same safety border"
+    ],
+    "height_id": 0,
+    "max_z": 15,
+    "message": "All robots in the fleet with the same safety border"
   }
   ```
+
   </details>
 
 - <strong style="color: #49cc90">`POST`</strong>
@@ -238,77 +244,77 @@ Endpoints for controlling the robot's environment.
     </summary>
 
   ```json
-   {
-    "obstacles":[
-       {
-          "points":[
-             {
-                "x":47.39776,
-                "y":8.545254
-             },
-             {
-                "x":47.397719,
-                "y":8.545436
-             },
-             {
-                "x":47.397601,
-                "y":8.545367
-             },
-             {
-                "x":47.397657,
-                "y":8.545191
-             }
-          ],
-          "height_id":1,
-          "max_z":347,
-          "min_z":343
-       },
-       {
-          "points":[
-             {
-                "x":47.397900,
-                "y":8.545800
-             },
-             {
-                "x":47.397855,
-                "y":8.545950
-             },
-             {
-                "x":47.397750,
-                "y":8.545890
-             },
-             {
-                "x":47.397795,
-                "y":8.545740
-             }
-          ],
-          "height_id":1,
-          "max_z":350,
-          "min_z":345
-       },
-       {
-          "points":[
-             {
-                "x":47.398100,
-                "y":8.545100
-             },
-             {
-                "x":47.398050,
-                "y":8.545250
-             },
-             {
-                "x":47.397950,
-                "y":8.545200
-             },
-             {
-                "x":47.398000,
-                "y":8.545050
-             }
-          ],
-          "height_id":1,
-          "max_z":352,
-          "min_z":348
-       }
+  {
+    "obstacles": [
+      {
+        "points": [
+          {
+            "x": 47.39776,
+            "y": 8.545254
+          },
+          {
+            "x": 47.397719,
+            "y": 8.545436
+          },
+          {
+            "x": 47.397601,
+            "y": 8.545367
+          },
+          {
+            "x": 47.397657,
+            "y": 8.545191
+          }
+        ],
+        "height_id": 1,
+        "max_z": 347,
+        "min_z": 343
+      },
+      {
+        "points": [
+          {
+            "x": 47.3979,
+            "y": 8.5458
+          },
+          {
+            "x": 47.397855,
+            "y": 8.54595
+          },
+          {
+            "x": 47.39775,
+            "y": 8.54589
+          },
+          {
+            "x": 47.397795,
+            "y": 8.54574
+          }
+        ],
+        "height_id": 1,
+        "max_z": 350,
+        "min_z": 345
+      },
+      {
+        "points": [
+          {
+            "x": 47.3981,
+            "y": 8.5451
+          },
+          {
+            "x": 47.39805,
+            "y": 8.54525
+          },
+          {
+            "x": 47.39795,
+            "y": 8.5452
+          },
+          {
+            "x": 47.398,
+            "y": 8.54505
+          }
+        ],
+        "height_id": 1,
+        "max_z": 352,
+        "min_z": 348
+      }
     ]
   }
   ```
@@ -320,114 +326,116 @@ Endpoints for controlling the robot's environment.
   <span style="color: gray">
   Retrieve the obstacles.
   </span>
-  
-  
+
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
- 
+
   Status code: **202 Accepted**
- 
+
   ```json
   {
-   "obstacles":[
+    "obstacles": [
       {
-         "height_id":0,
-         "max_z":7.05999999660582489014,
-         "frame_id":1,
-         "min_z":3.05999999660582489014,
-         "points":[
-            {
-               "x":47.3977600015785611731,
-               "y":8.54525399998640722288
-            },
-            {
-               "y":8.54543599998641312254,
-               "x":47.3977190015785652122
-            },
-            {
-               "x":47.3976010015785576002,
-               "y":8.54536699998641147147
-            },
-            {
-               "x":47.3976570015785512169,
-               "y":8.54519099998640641047
-            },
-            {
-               "y":8.54525399998640722288,
-               "x":47.3977600015785611731
-            }
-         ]
+        "height_id": 0,
+        "max_z": 7.05999999660582489014,
+        "frame_id": 1,
+        "min_z": 3.05999999660582489014,
+        "points": [
+          {
+            "x": 47.3977600015785611731,
+            "y": 8.54525399998640722288
+          },
+          {
+            "y": 8.54543599998641312254,
+            "x": 47.3977190015785652122
+          },
+          {
+            "x": 47.3976010015785576002,
+            "y": 8.54536699998641147147
+          },
+          {
+            "x": 47.3976570015785512169,
+            "y": 8.54519099998640641047
+          },
+          {
+            "y": 8.54525399998640722288,
+            "x": 47.3977600015785611731
+          }
+        ]
       },
       {
-         "points":[
-            {
-               "y":8.54579999998642314551,
-               "x":47.3979000015785771893
-            },
-            {
-               "x":47.3978550015785771166,
-               "y":8.54594999998642634864
-            },
-            {
-               "y":8.54588999998642506739,
-               "x":47.3977500015785722098
-            },
-            {
-               "y":8.54573999998642364062,
-               "x":47.3977950015785864935
-            },
-            {
-               "x":47.3979000015785771893,
-               "y":8.54579999998642314551
-            }
-         ],
-         "min_z":5.05999999660582489014,
-         "frame_id":1,
-         "max_z":10.0599999966058248901,
-         "height_id":0
+        "points": [
+          {
+            "y": 8.54579999998642314551,
+            "x": 47.3979000015785771893
+          },
+          {
+            "x": 47.3978550015785771166,
+            "y": 8.54594999998642634864
+          },
+          {
+            "y": 8.54588999998642506739,
+            "x": 47.3977500015785722098
+          },
+          {
+            "y": 8.54573999998642364062,
+            "x": 47.3977950015785864935
+          },
+          {
+            "x": 47.3979000015785771893,
+            "y": 8.54579999998642314551
+          }
+        ],
+        "min_z": 5.05999999660582489014,
+        "frame_id": 1,
+        "max_z": 10.0599999966058248901,
+        "height_id": 0
       },
       {
-         "height_id":0,
-         "max_z":12.0599999966058248901,
-         "frame_id":1,
-         "min_z":6.44836723768419848974e-31,
-         "points":[
-            {
-               "x":47.3981000015786122503,
-               "y":8.54509999998640168428
-            },
-            {
-               "y":8.54524999998640488741,
-               "x":47.3980500015786105905
-            },
-            {
-               "x":47.39795000157859306,
-               "y":8.54519999998640500394
-            },
-            {
-               "x":47.3980000015786018253,
-               "y":8.54504999998640002445
-            },
-            {
-               "y":8.54509999998640168428,
-               "x":47.3981000015786122503
-            }
-         ]
+        "height_id": 0,
+        "max_z": 12.0599999966058248901,
+        "frame_id": 1,
+        "min_z": 6.44836723768419848974e-31,
+        "points": [
+          {
+            "x": 47.3981000015786122503,
+            "y": 8.54509999998640168428
+          },
+          {
+            "y": 8.54524999998640488741,
+            "x": 47.3980500015786105905
+          },
+          {
+            "x": 47.39795000157859306,
+            "y": 8.54519999998640500394
+          },
+          {
+            "x": 47.3980000015786018253,
+            "y": 8.54504999998640002445
+          },
+          {
+            "y": 8.54509999998640168428,
+            "x": 47.3981000015786122503
+          }
+        ]
       }
-   ],
-   "message":"All robots in the fleet with the same obstacles"
+    ],
+    "message": "All robots in the fleet with the same obstacles"
   }
   ```
+
   </details>
- 
- > **NOTE** \
- > In case of any discrepancy within the robot's safety border, obstacles & origin, having different values 
-You will receive a Status code **409 Conflict**, and a message to let the user know about the conflict: 
+
+> **NOTE** \
+> In case of any discrepancy within the robot's safety border, obstacles & origin, having different values
+> You will receive a Status code **409 Conflict**, and a message to let the user know about the conflict:
 
 ```json
-{"message": "Call was not successful with message: Discrepancy in the borders between the fleet, please set the safety borders!"}
+{
+  "message": "Call was not successful with message: Discrepancy in the borders between the fleet, please set the safety borders!"
+}
 ```
 
 ---
@@ -435,12 +443,13 @@ You will receive a Status code **409 Conflict**, and a message to let the user k
 ## Missions
 
 The missions are handled by `IROC Fleet Manager`: a node responsible for sending the mission to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
+
 - <strong style="color: #49cc90">`POST`</strong>
   **/mission**  
   <span style="color: gray">
-  Set a mission 
+  Set a mission
   </span>
-  
+
 <figure align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="img/mission_diagram_dark.svg" />
@@ -450,82 +459,83 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   <figcaption>Mission Sequence Diagram</figcaption>
 </figure>
 
- The mission request requires the following fields:
- - **type key** to specify the mission type and the specific details of the mission.
- - **details key** with the specific details for each mission.
- - **Uuid key** for synchronization with the UI.
+The mission request requires the following fields:
+
+- **type key** to specify the mission type and the specific details of the mission.
+- **details key** with the specific details for each mission.
+- **Uuid key** for synchronization with the UI.
 
   <details>
   <summary>
   <em> WaypointPlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
-  {
-   "type": "WaypointPlanner",
-   "uuid": "550e8400-e29b-41d4-a716-446655440000",
-   "details": {
-     "robots": [
-       {
-         "name": "uav1",
-         "frame_id": 0,
-         "height_id": 0,
-         "points": [
-           {
-             "x": 20,
-             "y": 10,
-             "z": 3,
-             "heading": 1
-           },
-           {
-             "x": 20,
-             "y": 10,
-             "z": 3,
-             "heading": 3
-           },
-           {
-             "x": -20,
-             "y": -20,
-             "z": 4,
-             "heading": 3,
-             "subtasks": [
-               {
-                 "type": "gazebo_gimbal",
-                 "parameters": [0.5, 0.5, 0.5]
-               }
-             ]
-           },
-           {
-             "x": -10,
-             "y": 10,
-             "z": 5,
-             "heading": 3
-           },
-           {
-             "x": 10,
-             "y": -10,
-             "z": 4,
-             "heading": 3,
-             "subtasks": [
-               {
-                 "type": "wait",
-                 "parameters": 5.6
-               }
-             ]
-           },
-           {
-             "x": 20,
-             "y": 10,
-             "z": 3,
-             "heading": 1
-           }
-         ],
-         "terminal_action": 0
-       }
-     ]
-   }
+```json
+{
+  "type": "WaypointPlanner",
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "details": {
+    "robots": [
+      {
+        "name": "uav1",
+        "frame_id": 0,
+        "height_id": 0,
+        "points": [
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 1
+          },
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 3
+          },
+          {
+            "x": -20,
+            "y": -20,
+            "z": 4,
+            "heading": 3,
+            "subtasks": [
+              {
+                "type": "gazebo_gimbal",
+                "parameters": [0.5, 0.5, 0.5]
+              }
+            ]
+          },
+          {
+            "x": -10,
+            "y": 10,
+            "z": 5,
+            "heading": 3
+          },
+          {
+            "x": 10,
+            "y": -10,
+            "z": 4,
+            "heading": 3,
+            "subtasks": [
+              {
+                "type": "wait",
+                "parameters": 5.6
+              }
+            ]
+          },
+          {
+            "x": 20,
+            "y": 10,
+            "z": 3,
+            "heading": 1
+          }
+        ],
+        "terminal_action": 0
+      }
+    ]
   }
-  ```
+}
+```
 
   </details>
 
@@ -534,36 +544,36 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   <em> Coverage Planner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
-   {
-   "type": "CoveragePlanner",
-   "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
-   "details": {
-     "robots": ["uav1", "uav2"],
-     "search_area": [
-       {
-         "x": 47.397978,
-         "y": 8.545299
-       },
-       {
-         "x": 47.397848,
-         "y": 8.545872
-       },
-       {
-         "x": 47.397551,
-         "y": 8.54572
-       },
-       {
-         "x": 47.397699,
-         "y": 8.545129
-       }
-     ],
-     "height_id": 0,
-     "height": 5,
-     "terminal_action": 0
-   }
+```json
+{
+  "type": "CoveragePlanner",
+  "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
+  "details": {
+    "robots": ["uav1", "uav2"],
+    "search_area": [
+      {
+        "x": 47.397978,
+        "y": 8.545299
+      },
+      {
+        "x": 47.397848,
+        "y": 8.545872
+      },
+      {
+        "x": 47.397551,
+        "y": 8.54572
+      },
+      {
+        "x": 47.397699,
+        "y": 8.545129
+      }
+    ],
+    "height_id": 0,
+    "height": 5,
+    "terminal_action": 0
   }
-  ```
+}
+```
 
   </details>
   
@@ -572,20 +582,20 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
   <em> AutonomyTestPlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  ```json
-  {
-    "type": "AutonomyTestPlanner",
-    "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
-    "details": {
-      "robots": [
-        {
-          "name": "uav1",
-          "segment_length": 5
-        }
-      ]
-    }
+```json
+{
+  "type": "AutonomyTestPlanner",
+  "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
+  "details": {
+    "robots": [
+      {
+        "name": "uav1",
+        "segment_length": 5
+      }
+    ]
   }
-  ```
+}
+```
 
   </details>
   
@@ -594,18 +604,19 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for sending
 ### Mission Response Examples
 
 The result follows the following structure:
-- **message**:  General message about the status of the mission.
-- **success**:  Boolean to denote if the mission was uploaded successfully.
-- **type**:  Type of the mission.
-- **uuid**:  The UUID of the mission.
-- **robot_data**:  An array with details for each robot in the mission.
+
+- **message**: General message about the status of the mission.
+- **success**: Boolean to denote if the mission was uploaded successfully.
+- **type**: Type of the mission.
+- **uuid**: The UUID of the mission.
+- **robot_data**: An array with details for each robot in the mission.
   - **robot**: String with the name of the robot.
-  - **message**:  Individual robot message.
-  - **success**:  Boolean to denote the individual result of the robot.
-  - **mission**:  The details of the mission that were loaded into the robot.
+  - **message**: Individual robot message.
+  - **success**: Boolean to denote the individual result of the robot.
+  - **mission**: The details of the mission that were loaded into the robot.
 
 1. Successful mission upload
-   
+
   <details>
    <summary>
    <em>Body</em> <span style="color: gray"> example response (json)</span>
@@ -674,7 +685,7 @@ The result follows the following structure:
 
 2. Uploading mission failure due to safety validation.
 <details>
- 
+
   <summary>
   <em>Body</em> <span style="color: gray"> example response (json)</span>
   </summary>
@@ -684,42 +695,39 @@ The result follows the following structure:
 
 ```json
 {
-   "robot_data":[
-      {
-         "message":"The given points are valid for: uav1, however the generated trajectory seems to be outside of safety area or within an obstacle.",
-         "mission":[
-            
-         ],
-         "success":false,
-         "robot":"uav1"
-      }
-   ],
-   "message":"Failure starting robot clients.",
-   "success":false
+  "robot_data": [
+    {
+      "message": "The given points are valid for: uav1, however the generated trajectory seems to be outside of safety area or within an obstacle.",
+      "mission": [],
+      "success": false,
+      "robot": "uav1"
+    }
+  ],
+  "message": "Failure starting robot clients.",
+  "success": false
 }
 ```
+
 ```json
 {
-   "robot_data":[
-      {
-         "message":"Unvalid trajectory for uav1, trajectory is outside of safety area",
-         "mission":[
-            
-         ],
-         "success":false,
-         "robot":"uav1"
-      }
-   ],
-   "message":"Failure starting robot clients.",
-   "success":false
+  "robot_data": [
+    {
+      "message": "Unvalid trajectory for uav1, trajectory is outside of safety area",
+      "mission": [],
+      "success": false,
+      "robot": "uav1"
+    }
+  ],
+  "message": "Failure starting robot clients.",
+  "success": false
 }
 ```
- 
+
 </details>
 
 3. Uploading mission failure due to loaded mission in server.
 <details>
- 
+
   <summary>
   <em>Body</em> <span style="color: gray"> example response (json)</span>
   </summary>
@@ -732,7 +740,7 @@ The result follows the following structure:
   "message": "Mission is already running. Terminate the previous one, or wait until it is finished."
 }
 ```
- 
+
 </details>
 
 ---
@@ -742,85 +750,83 @@ The result follows the following structure:
 - <strong style="color: #61affe">`GET`</strong>
   **/mission**  
   <span style="color: gray">
-  Retrieve the  mission loaded in the server.
+  Retrieve the mission loaded in the server.
   </span>
-  
-  
+
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
- 
+
   Status code: **202 Accepted**
- 
+
   ```json
   {
-     "robot_data":[
-        {
-           "message": "Mission loaded successfully",
-           "mission":{
-              "frame_id":0,
-              "height_id":0,
-              "points":[
-                 {
-                    "x":20,
-                    "y":10,
-                    "heading":1,
-                    "z":3
-                 },
-                 {
-                    "z":3,
-                    "heading":3,
-                    "y":10,
-                    "x":20
-                 },
-                 {
-                    "x":-20,
-                    "y":-20,
-                    "heading":3,
-                    "z":4
-                 },
-                 {
-                    "x":-10,
-                    "y":10,
-                    "heading":3,
-                    "z":5
-                 },
-                 {
-                    "z":4,
-                    "heading":3,
-                    "y":-10,
-                    "x":10
-                 },
-                 {
-                    "z":3,
-                    "heading":1,
-                    "y":10,
-                    "x":20
-                 }
-              ]
-           },
-           "success":true,
-           "robot":"uav1"
-        }
-     ],
-     "uuid":"550e8400-e29b-41d4-a716-446655440000",
-     "type":"WaypointPlanner",
-     "message":"Mission uploaded successfully",
-     "success":true
+    "robot_data": [
+      {
+        "message": "Mission loaded successfully",
+        "mission": {
+          "frame_id": 0,
+          "height_id": 0,
+          "points": [
+            {
+              "x": 20,
+              "y": 10,
+              "heading": 1,
+              "z": 3
+            },
+            {
+              "z": 3,
+              "heading": 3,
+              "y": 10,
+              "x": 20
+            },
+            {
+              "x": -20,
+              "y": -20,
+              "heading": 3,
+              "z": 4
+            },
+            {
+              "x": -10,
+              "y": 10,
+              "heading": 3,
+              "z": 5
+            },
+            {
+              "z": 4,
+              "heading": 3,
+              "y": -10,
+              "x": 10
+            },
+            {
+              "z": 3,
+              "heading": 1,
+              "y": 10,
+              "x": 20
+            }
+          ]
+        },
+        "success": true,
+        "robot": "uav1"
+      }
+    ],
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "type": "WaypointPlanner",
+    "message": "Mission uploaded successfully",
+    "success": true
   }
   ```
+
   </details>
 
 If there is no active mission, you will get an unsuccessful response, with the message that there is no active mission:
 
 ```json
 {
-   "robot_data":[
-      
-   ],
-   "success": false,
-   "message" :"No active mission."
+  "robot_data": [],
+  "success": false,
+  "message": "No active mission."
 }
 ```
 
@@ -875,7 +881,9 @@ You can also control individual mission robots using these endpoints:
   </span>
   > **NOTE** \
   > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
+
 ---
+
 ### Feedback
 
 During an active mission, the feedback message is broadcast to the connected clients through a WebSocket in the `/telemetry` path.
@@ -966,7 +974,8 @@ Send the result of the mission.
 ---
 
 ## Subtasks
-On the  Waypoint missions, you can send a list of subtasks that will be executed by the robot when it reaches a waypoint. You just need to add a new field called `subtasks` in the waypoint message, which is an array of subtasks. Requests are retro-compatible, so you can use the feature without changing the existing missions or additional fields.
+
+On the Waypoint missions, you can send a list of subtasks that will be executed by the robot when it reaches a waypoint. You just need to add a new field called `subtasks` in the waypoint message, which is an array of subtasks. Requests are retro-compatible, so you can use the feature without changing the existing missions or additional fields.
 
 There are two types of subtasks supported: `wait` and `gazebo_gimbal` (for simulation), but they can be extended in the future due to the ROS `plugin` architecture in `iroc_mission_handler`.
 
@@ -1011,6 +1020,7 @@ It receives an array of three floating-point numbers representing the camera ori
 ---
 
 ### Waypoint Structure
+
 The subtask system allows you to define complex behaviors that are executed when a robot reaches a waypoint.
 
 Each waypoint now supports the following structure:
@@ -1065,6 +1075,7 @@ These are the fundamental fields for configuring a subtask:
 ```
 
 #### Mission with multiple subtasks example:
+
 <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
@@ -1101,11 +1112,7 @@ These are the fundamental fields for configuring a subtask:
             "subtasks": [
               {
                 "type": "gazebo_gimbal",
-                "parameters": [
-                  0.5,
-                  0.5,
-                  0.5
-                ],
+                "parameters": [0.5, 0.5, 0.5],
                 "continue_without_waiting": false,
                 "stop_on_failure": false,
                 "max_retries": 1,
@@ -1361,6 +1368,74 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   ```
 
   </details>
+
+- <strong style="color: orange">`onmessage`</strong>
+  **Sensor Info**
+    <details>
+      <summary>
+      <em>Message</em> <span style="color: gray">raw (json)</span>
+      </summary>
+
+  ```json
+  {
+  "type": "SensorInfo"
+  "details": {
+    "type": 7,
+    "camera_frame_tf": {
+      "rotation_rpy": {
+        "pitch": -0.000007,
+        "roll": -0.038402,
+        "yaw": 0
+      },
+      "translation": {
+        "x": 0.09669,
+        "y": 0.002004,
+        "z": -0.060549
+      }
+    },
+    "camera_info": {
+      "fov_x_rad": 1.92,
+      "fov_y_rad": 1.353683,
+      "height": 1080,
+      "width": 1920
+    },
+    "camera_orientation": {
+      "orientation_rpy": {
+        "pitch": -0.000007,
+        "roll": -0.038402,
+        "yaw": 0
+      }
+    },
+    "optical_frame_tf": {
+      "rotation_rpy": {
+        "pitch": -0.038402,
+        "roll": -1.570789,
+        "yaw": -1.570796
+      },
+      "translation": {
+        "x": 0.09669,
+        "y": 0.002004,
+        "z": -0.060549
+      }
+    }
+  },
+  "type": "SensorInfo"
+  }
+  ```
+
+  >NOTE: The `type` field in the `details` object indicates the sensor type (e.g., 7 for camera).
+  > The available sensor types are defined in the `mrs_robot_diagnostics/SensorStatus` message.
+  > The available types are:
+    > - 0: Autopilot
+    > - 1: Rangefinder
+    > - 2: GPS
+    > - 3: IMU
+    > - 4: Barometer
+    > - 5: Magnetometer
+    > - 6: LIDAR
+    > - 7: camera
+
+    </details>
 
 ### Robot remote control
 
