@@ -38,11 +38,9 @@ Endpoints for controlling the robots.
       }
 
   ]
-
   ```
   </details>
 
-  ```
 
 - <strong style="color: #48cc90">`POST`</strong>
   **/robots/{_robot_name_}/takeoff**  
@@ -470,72 +468,72 @@ The mission request requires the following fields:
   <em> WaypointPlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-```json
-{
-  "type": "WaypointPlanner",
-  "uuid": "550e8400-e29b-41d4-a716-446655440000",
-  "details": {
-    "robots": [
-      {
-        "name": "uav1",
-        "frame_id": 0,
-        "height_id": 0,
-        "points": [
+  ```json
+  {
+      "type": "WaypointPlanner",
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "details": {
+        "robots": [
           {
-            "x": 20,
-            "y": 10,
-            "z": 3,
-            "heading": 1
-          },
-          {
-            "x": 20,
-            "y": 10,
-            "z": 3,
-            "heading": 3
-          },
-          {
-            "x": -20,
-            "y": -20,
-            "z": 4,
-            "heading": 3,
-            "subtasks": [
+            "name": "uav1",
+            "frame_id": 0,
+            "height_id": 0,
+            "points": [
               {
-                "type": "gazebo_gimbal",
-                "parameters": [0.5, 0.5, 0.5]
-              }
-            ]
-          },
-          {
-            "x": -10,
-            "y": 10,
-            "z": 5,
-            "heading": 3
-          },
-          {
-            "x": 10,
-            "y": -10,
-            "z": 4,
-            "heading": 3,
-            "subtasks": [
+                "x": 20,
+                "y": 10,
+                "z": 3,
+                "heading": 1
+              },
               {
-                "type": "wait",
-                "parameters": 5.6
+                "x": 20,
+                "y": 10,
+                "z": 3,
+                "heading": 3
+              },
+              {
+                "x": -20,
+                "y": -20,
+                "z": 4,
+                "heading": 3,
+                "subtasks": [
+                  {
+                    "type": "gazebo_gimbal",
+                    "parameters": [0.5, 0.5, 0.5]
+                  }
+                ]
+              },
+              {
+                "x": -10,
+                "y": 10,
+                "z": 5,
+                "heading": 3
+              },
+              {
+                "x": 10,
+                "y": -10,
+                "z": 4,
+                "heading": 3,
+                "subtasks": [
+                  {
+                    "type": "wait",
+                    "parameters": 5.6
+                  }
+                ]
+              },
+              {
+                "x": 20,
+                "y": 10,
+                "z": 3,
+                "heading": 1
               }
-            ]
-          },
-          {
-            "x": 20,
-            "y": 10,
-            "z": 3,
-            "heading": 1
+            ],
+            "terminal_action": 0
           }
-        ],
-        "terminal_action": 0
+        ]
       }
-    ]
   }
-}
-```
+  ```
 
   </details>
 
@@ -822,13 +820,21 @@ The result follows the following structure:
 
 If there is no active mission, you will get an unsuccessful response, with the message that there is no active mission:
 
-```json
-{
-  "robot_data": [],
-  "success": false,
-  "message": "No active mission."
-}
-```
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">raw (json)</span>
+  </summary>
+
+
+  ```json
+  {
+      "robot_data": [],
+      "success": false,
+      "message": "No active mission."
+  }
+  ```
+
+  </details>
 
 ---
 
