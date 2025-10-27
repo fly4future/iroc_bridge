@@ -542,36 +542,36 @@ The mission request requires the following fields:
   <em> Coverage Planner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-```json
-{
-  "type": "CoveragePlanner",
-  "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
-  "details": {
-    "robots": ["uav1", "uav2"],
-    "search_area": [
-      {
-        "x": 47.397978,
-        "y": 8.545299
-      },
-      {
-        "x": 47.397848,
-        "y": 8.545872
-      },
-      {
-        "x": 47.397551,
-        "y": 8.54572
-      },
-      {
-        "x": 47.397699,
-        "y": 8.545129
-      }
-    ],
-    "height_id": 0,
-    "height": 5,
-    "terminal_action": 0
+  ```json
+  {
+    "type": "CoveragePlanner",
+    "uuid": "b5aaa323-64e5-4eb8-8615-e4059fe84997",
+    "details": {
+      "robots": ["uav1", "uav2"],
+      "search_area": [
+        {
+          "x": 47.397978,
+          "y": 8.545299
+        },
+        {
+          "x": 47.397848,
+          "y": 8.545872
+        },
+        {
+          "x": 47.397551,
+          "y": 8.54572
+        },
+        {
+          "x": 47.397699,
+          "y": 8.545129
+        }
+      ],
+      "height_id": 0,
+      "height": 5,
+      "terminal_action": 0
+    }
   }
-}
-```
+  ```
 
   </details>
   
@@ -580,20 +580,20 @@ The mission request requires the following fields:
   <em> AutonomyTestPlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-```json
-{
-  "type": "AutonomyTestPlanner",
-  "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
-  "details": {
-    "robots": [
-      {
-        "name": "uav1",
-        "segment_length": 5
-      }
-    ]
+  ```json
+  {
+    "type": "AutonomyTestPlanner",
+    "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
+    "details": {
+      "robots": [
+        {
+          "name": "uav1",
+          "segment_length": 5
+        }
+      ]
+    }
   }
-}
-```
+  ```
 
   </details>
   
