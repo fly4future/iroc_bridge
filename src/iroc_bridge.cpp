@@ -55,6 +55,7 @@
 #include <mrs_robot_diagnostics/CollisionAvoidanceInfo.h>
 #include <mrs_robot_diagnostics/UavInfo.h>
 #include <mrs_robot_diagnostics/SystemHealthInfo.h>
+#include <mrs_robot_diagnostics/SensorInfo.h>
 #include <mrs_robot_diagnostics/enums/robot_type.h>
 
 #include <iroc_fleet_manager/IROCFleetManagerAction.h>
@@ -146,6 +147,7 @@ class IROCBridge : public nodelet::Nodelet {
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::CollisionAvoidanceInfo> sh_collision_avoidance_info;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::UavInfo> sh_uav_info;
     mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo> sh_system_health_info;
+    mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SensorInfo> sh_sensor_info;
 
     ros::ServiceClient sc_takeoff;
     ros::ServiceClient sc_land;
@@ -194,6 +196,7 @@ class IROCBridge : public nodelet::Nodelet {
   void parseControlInfo(mrs_robot_diagnostics::ControlInfo::ConstPtr control_info, const std::string& robot_name);
   void parseCollisionAvoidanceInfo(mrs_robot_diagnostics::CollisionAvoidanceInfo::ConstPtr collision_avoidance_info, const std::string& robot_name);
   void parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info, const std::string& robot_name);
+  void parseSensorInfo(mrs_robot_diagnostics::SensorInfo::ConstPtr sensor_info, const std::string& robot_name);
   void parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr uav_info, const std::string& robot_name);
 
   void sendJsonMessage(const std::string& msg_type, json& json_msg);
@@ -426,6 +429,9 @@ void IROCBridge::onInit() {
       const std::string system_health_info_topic_name = "/" + robot_name + nh_.resolveName("in/system_health_info");
       robot_handler.sh_system_health_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SystemHealthInfo>(shopts, system_health_info_topic_name);
 
+      const std::string sensor_info_topic_name = "/" + robot_name + nh_.resolveName("in/sensor_info");
+      robot_handler.sh_sensor_info = mrs_lib::SubscribeHandler<mrs_robot_diagnostics::SensorInfo>(shopts, sensor_info_topic_name);
+
       robot_handler.sc_takeoff = nh_.serviceClient<std_srvs::Trigger>("/" + robot_name + nh_.resolveName("svc/takeoff"));
       ROS_INFO("[IROCBridge]: Created ServiceClient on service \'svc/takeoff\' -> \'%s\'", robot_handler.sc_takeoff.getService().c_str());
 
@@ -542,6 +548,10 @@ void IROCBridge::timerMain([[maybe_unused]] const ros::TimerEvent& event) {
 
     if (rh.sh_system_health_info.newMsg()) {
       parseSystemHealthInfo(rh.sh_system_health_info.getMsg(), robot_name);
+    }
+
+    if (rh.sh_sensor_info.newMsg()) {
+      parseSensorInfo(rh.sh_sensor_info.getMsg(), robot_name);
     }
 
     if (sch_fleet_manager_feedback_.newMsg()) {
@@ -783,6 +793,21 @@ void IROCBridge::parseUavInfo(mrs_robot_diagnostics::UavInfo::ConstPtr uav_info,
   sendTelemetryJsonMessage("UavInfo", json_msg);
 }
 //}
+
+/* parseSensorInfo() //{ */
+void IROCBridge::parseSensorInfo(mrs_robot_diagnostics::SensorInfo::ConstPtr sensor_info, const std::string& robot_name) {
+
+  crow::json::rvalue json_msg = crow::json::load(sensor_info->details);
+  if (!json_msg) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[IROCBridge]: Could not parse sensor details JSON string: " << sensor_info->details);
+    return;
+  }
+  json telemetry_msg = {
+      {"type", sensor_info->type},
+      {"details", json_msg}};
+
+  sendTelemetryJsonMessage("SensorInfo", telemetry_msg);
+}
 
 /* parseSystemHealthInfo() //{ */
 void IROCBridge::parseSystemHealthInfo(mrs_robot_diagnostics::SystemHealthInfo::ConstPtr system_health_info, const std::string& robot_name) {
