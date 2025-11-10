@@ -1385,6 +1385,7 @@ Robot's data and status can be received periodically in the `/telemetry` path.
   ```json
   {
   "type": "SensorInfo"
+  "robot_name": "uav1"
   "details": {
     "type": 7,
     "camera_frame_tf": {
