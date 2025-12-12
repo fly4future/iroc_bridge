@@ -1,28 +1,33 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
 
   <name>iroc_bridge</name>
-  <version>1.0.0</version>
+  <version>2.0.0</version>
   <description>Node to translate messages from ROS to backend and back</description>
 
   <maintainer email="spurny@fly4future.com">Vojtech Spurny</maintainer>
   <author email="spurny@fly4future.com">Vojtech Spurny</author>
+  <author email="rivermar@fly4future.com">Marlon Rivera</author>
+  <author email="chitiva@fly4future.com">Cristian Chitiva</author>
 
   <license>MIT</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
-  <depend>cmake_modules</depend>
-  <depend>roscpp</depend>
-  <depend>nodelet</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>rclcpp_action</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
   <depend>sensor_msgs</depend>
-  <depend>actionlib</depend>
   <depend>mrs_msgs</depend>
-  <depend>mrs_robot_diagnostics</depend>
   <depend>mrs_lib</depend>
-  <depend>iroc_fleet_manager</depend>
+  <depend>mrs_robot_diagnostics</depend>
+  <!-- <depend>iroc_fleet_manager</depend> -->
   <export>
-    <nodelet plugin="${prefix}/nodelets.xml" />
+    <build_type>ament_cmake</build_type>
   </export>
 
 </package>

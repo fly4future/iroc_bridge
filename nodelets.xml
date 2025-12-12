@@ -1,5 +1,0 @@
-<library path="lib/libIROCBridge">
-  <class name="iroc_bridge/IROCBridge" type="iroc_bridge::IROCBridge" base_class_type="nodelet::Nodelet">
-    <description>Ros2jsonBridge nodelet</description>
-  </class>
-</library>
