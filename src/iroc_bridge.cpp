@@ -329,10 +329,10 @@ void IROCBridge::initialize() {
   auto it = std::remove(filtered_robot_names.begin(), filtered_robot_names.end(), hostname_str);
   filtered_robot_names.erase(it, filtered_robot_names.end());
 
-  // Arguments given in launchfile
-  const auto url         = param_loader.loadParam2<std::string>("url");
-  const auto client_port = param_loader.loadParam2<int>("client_port");
-  const auto server_port = param_loader.loadParam2<int>("server_port");
+  // Arguments set config file
+  const auto client_url  = param_loader.loadParam2<std::string>("iroc_bridge/client_url");
+  const auto client_port = param_loader.loadParam2<int>("iroc_bridge/client_port");
+  const auto server_port = param_loader.loadParam2<int>("iroc_bridge/server_port");
 
   const auto main_timer_rate       = param_loader.loadParam2<double>("iroc_bridge/main_timer_rate");
   const auto _http_server_threads_ = param_loader.loadParam2<double>("iroc_bridge/http_server_threads");
@@ -349,7 +349,7 @@ void IROCBridge::initialize() {
 
   // | ----------------- HTTP REST API callbacks ---------------- |
   // HTTP Client
-  http_client_ = std::make_unique<httplib::Client>(url, client_port);
+  http_client_ = std::make_unique<httplib::Client>(client_url, client_port);
 
   // HTTP Server
   // Do we need this (set_path)?
@@ -546,15 +546,14 @@ void IROCBridge::initialize() {
   // | --------------------- finish the init -------------------- |
   RCLCPP_INFO(node_->get_logger(), "initialized");
 
-  RCLCPP_INFO(node_->get_logger(), "\n"
-                                   " ___ ____   ___   ____ ____       _     _ \n"
-                                   "|_ _|  _ \ / _ \ / ___| __ ) _ __(_) __| | __ _  ___ \n"
-                                   " | || |_) | | | | |   |  _ \| '__| |/ _` |/ _` |/ _ \ \n"
-                                   " | ||  _ <| |_| | |___| |_) | |  | | (_| | (_| |  __/ \n"
-                                   "|___|_| \_\\___/ \____|____/|_|  |_|\__,_|\__, |\___| \n"
-                                   "                                          |___/ \n");
+  RCLCPP_INFO(node_->get_logger(), R"(
+   ___ ____   ___   ____ ____       _     _
+  |_ _|  _ \ / _ \ / ___| __ ) _ __(_) __| | __ _  ___
+   | || |_) | | | | |   |  _ \| '__| |/ _` |/ _` |/ _ \ 
+   | ||  _ <| |_| | |___| |_) | |  | | (_| | (_| |  __/
+  |___|_| \_\\___/ \____|____/|_|  |_|\__,_|\__, |\___|
+  )");
 }
-
 
 //}
 
@@ -1001,15 +1000,14 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   auto it = trigger_command_handlers_.find(command_type);
   if (it == trigger_command_handlers_.end()) {
     ss << "Command type \"" << command_type << "\" not found\n";
-    RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, 
-      "Command type \"" << command_type << "\" not found.");
+    RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Command type \"" << command_type << "\" not found.");
     return {false, ss.str(), crow::status::NOT_FOUND};
   }
 
   auto handler_ptr = it->second;
 
   RCLCPP_INFO_STREAM(node_->get_logger(), "Calling command \"" << command_type << "\".");
-  
+
   auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
 
   for (const auto &robot_name : robot_names) {

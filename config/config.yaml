@@ -1,4 +1,7 @@
 iroc_bridge: 
+  client_url: "127.0.0.1" 
+  client_port: 8000 
+  server_port: 8080
   main_timer_rate: 100.0 # [Hz]
   no_message_timeout: 5.0 # [s]
   http_server_threads: 8
