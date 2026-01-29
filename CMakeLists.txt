@@ -37,6 +37,7 @@ set(DEPENDENCIES
   mrs_msgs
   mrs_lib
   mrs_robot_diagnostics
+  iroc_fleet_manager
   sensor_msgs
 )
 
@@ -71,6 +72,7 @@ target_link_libraries(IROCBridge
     rclcpp_action::rclcpp_action
     mrs_lib::mrs_lib
     mrs_robot_diagnostics::mrs_robot_diagnostics
+    ${iroc_fleet_manager_TARGETS}
     ${mrs_msgs_TARGETS}
     ${sensor_msgs_TARGETS}
 )
