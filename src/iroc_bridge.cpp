@@ -593,18 +593,19 @@ void IROCBridge::missionDoneCallback(const rclcpp_action::ClientGoalHandle<Missi
 
   current_goal_handle_.reset();
 
+  // TODO fill properly
   switch (result.code) {
   case rclcpp_action::ResultCode::SUCCEEDED:
-    RCLCPP_INFO_STREAM(node_->get_logger(), "[IROCBridge]: Mission Action server finished successfully");
+    RCLCPP_INFO_STREAM(node_->get_logger(), "Fleet manager mission action server finished successfully");
     break;
   case rclcpp_action::ResultCode::ABORTED:
-    RCLCPP_WARN_STREAM(node_->get_logger(), "[IROCBridge]: Mission Action server was aborted");
+    RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet manager mission action server was aborted");
     break;
   case rclcpp_action::ResultCode::CANCELED:
-    RCLCPP_WARN_STREAM(node_->get_logger(), "[IROCBridge]: Mission Action server was canceled");
+    RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet manager mission action server was canceled");
     break;
   default:
-    RCLCPP_ERROR_STREAM(node_->get_logger(), "[IROCBridge]: Unknown result code from Mission Action server");
+    RCLCPP_ERROR_STREAM(node_->get_logger(), "Unknown result code from Mission Action server");
     break;
   }
 
@@ -1608,7 +1609,9 @@ crow::response IROCBridge::missionCallback(const crow::request &request) {
     auto send_goal_options = rclcpp_action::Client<Mission>::SendGoalOptions();
 
     // Goal response callback
+    // TODO this in a proper callback
     send_goal_options.goal_response_callback = [this](MissionGoalHandle::SharedPtr goal_handle) {
+
       if (!goal_handle) {
         RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet mission rejected");
         return;
