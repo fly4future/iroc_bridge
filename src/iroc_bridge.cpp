@@ -1671,7 +1671,25 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
     return crow::response(crow::status::NOT_FOUND);
 
   if (type == "start") {
-    // Send async action with empty goal — fleet manager will use the pre-staged mission
+    // If the fleet manager action is already live (mission running but paused),
+    // resume via the change_fleet_mission_state service — fleet manager calls
+    // sc_robot_activation on each robot.  Otherwise send a new action (initial
+    // start) and fleet manager uses the pre-staged mission + auto-activates.
+    if (current_goal_handle_) {
+      const auto status   = current_goal_handle_->get_status();
+      const bool is_alive = (status == rclcpp_action::GoalStatus::STATUS_ACCEPTED || status == rclcpp_action::GoalStatus::STATUS_EXECUTING);
+      if (is_alive) {
+        RCLCPP_INFO_STREAM(node_->get_logger(), "Mission already active — resuming via service.");
+        auto request    = std::make_shared<mrs_msgs::srv::String::Request>();
+        request->value  = "start";
+        const auto resp = callService<mrs_msgs::srv::String>(sc_change_fleet_mission_state_, request);
+        if (!resp.success)
+          return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + resp.message + "\"}");
+        return crow::response(crow::status::ACCEPTED, "{\"message\": \"Mission resumed.\"}");
+      }
+    }
+
+    // Initial start: send action with empty goal.
     if (!mission_client_->wait_for_action_server(std::chrono::seconds(5))) {
       RCLCPP_WARN_STREAM(node_->get_logger(), "Action server not available for mission start.");
       return crow::response(crow::status::CONFLICT, "{\"message\": \"Action server not available. Check iroc_fleet_manager node.\"}");
