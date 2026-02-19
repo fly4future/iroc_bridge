@@ -66,6 +66,7 @@ def launch_setup(context, *args, **kwargs):
         ("~/get_safety_border_svc_in", "iroc_fleet_manager/get_safety_border"),
         ("~/get_obstacles_svc_in", "iroc_fleet_manager/get_obstacles"),
         ("~/get_mission_data_svc_in", "iroc_fleet_manager/get_mission_data"),
+        ("~/upload_fleet_mission_svc_in", "iroc_fleet_manager/upload_fleet_mission"),
     ]
 
 
