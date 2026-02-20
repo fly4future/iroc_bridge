@@ -214,7 +214,6 @@ private:
   crow::response getSafetyBorderCallback(const crow::request &req);
   crow::response setObstacleCallback(const crow::request &req);
   crow::response getObstaclesCallback(const crow::request &req);
-  crow::response missionCallback(const crow::request &req);
   crow::response uploadMissionCallback(const crow::request &req);
   crow::response getMissionCallback(const crow::request &req);
 
@@ -242,6 +241,7 @@ private:
 
   std::shared_ptr<MissionClient> mission_client_;
   MissionGoalHandle::SharedPtr current_goal_handle_;
+  std::mutex mtx_current_goal_handle_;
 
   // Latlon origin
   mrs_msgs::msg::Point2D world_origin_;
@@ -553,6 +553,7 @@ void IROCBridge::timerMain() {
 
 void IROCBridge::missionDoneCallback(const rclcpp_action::ClientGoalHandle<Mission>::WrappedResult &wrapped_result) {
 
+  std::scoped_lock lck(mtx_current_goal_handle_);
   current_goal_handle_.reset();
 
   auto result = wrapped_result.result;
@@ -731,7 +732,7 @@ void IROCBridge::parseSensorInfo(mrs_msgs::msg::SensorInfo::ConstSharedPtr senso
 
     return;
   }
-  json telemetry_msg = {{"robot_name", robot_name}, {"type", sensor_info->type}, {"details", json_msg}};
+  json telemetry_msg = {{"robot_name", robot_name}, {"sensor_type", sensor_info->type}, {"details", json_msg}};
 
   sendTelemetryJsonMessage("SensorInfo", telemetry_msg);
 }
@@ -1502,8 +1503,6 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
       return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: missing 'type' and/or 'details' keys\"}");
 
     std::string type = json_msg["type"].s();
-    // std::string uuid = json_msg.has("uuid") ? json_msg["uuid"].s() : "";
-    // json_msg.has("uuid") ? json_msg["uuid"].s() : "adwa";
 
     std::string uuid;
     if (!json_msg.has("uuid")) {
@@ -1560,111 +1559,23 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
   }
   catch (const std::exception &e) {
     RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to parse JSON: " << e.what());
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Failed to parse JSON: " + std::string(e.what()) + "\"}");
-  }
-}
-
-/**
- * \brief Callback for the waypoint mission request. It receives a list of missions for each robot and sends them to the fleet manager.
- *
- * \param req Crow request
- * \return res Crow response
- */
-crow::response IROCBridge::missionCallback(const crow::request &request) {
-
-  RCLCPP_INFO_STREAM(node_->get_logger(), "Parsing a missionCallback message JSON -> ROS.");
-
-  try {
-    crow::json::rvalue json_msg = crow::json::load(request.body);
-
-    if (!json_msg || !json_msg.has("type") || !json_msg.has("details"))
-      return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad request: Failed to parse JSON or missing 'type' and 'details' keys\"}");
-
-    // Validate if the action client is connected and if the action is already running
-    if (!mission_client_->wait_for_action_server(std::chrono::seconds(5))) {
-      RCLCPP_WARN_STREAM(node_->get_logger(), "Action server is not connected. Check iroc_fleet_manager node.");
-      std::string msg = "Action server is not connected. Check iroc_fleet_manager node.\n";
-      return crow::response(crow::status::CONFLICT, "{\"message\": \"" + msg + "\"}");
-    }
-
-    // Send the mission goal to fleet manager
-    auto goal = iroc_fleet_manager::action::ExecuteMission::Goal();
-
-    std::string type = json_msg["type"].s();
-    std::string uuid = json_msg["uuid"].s();
-
-    // Convert rvalue to wvalue, then dump to string
-    crow::json::wvalue details_wvalue(json_msg["details"]);
-    std::string details = details_wvalue.dump();
-
-    goal.type    = type;
-    goal.uuid    = uuid;
-    goal.details = details;
-
-    auto send_goal_options = rclcpp_action::Client<Mission>::SendGoalOptions();
-
-    // Goal response callback
-    // TODO this in a proper callback
-    send_goal_options.goal_response_callback = [this](MissionGoalHandle::SharedPtr goal_handle) {
-      if (!goal_handle) {
-        RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet mission rejected");
-        return;
-      }
-
-      current_goal_handle_ = goal_handle;
-      RCLCPP_INFO_STREAM(node_->get_logger(), "Mission accepted");
-    };
-
-    // Result callback
-    send_goal_options.result_callback = [this](const MissionGoalHandle::WrappedResult &result) { this->missionDoneCallback(result); };
-
-    // Feedback callback
-    send_goal_options.feedback_callback = [this](MissionGoalHandle::SharedPtr, const Mission::Feedback::ConstSharedPtr feedback) {
-      this->missionFeedbackCallback(feedback);
-    };
-
-    mission_client_->async_send_goal(goal, send_goal_options);
-    RCLCPP_INFO_STREAM(node_->get_logger(), "Mission goal sent to fleet manager.");
-
-    // TODO continue from here to implement proper action response in ROS2
-    // temporarily return accepted
-    // TODO fix after refactor with the service based mission uploading
-    return crow::response(crow::status::ACCEPTED, "{\"message\": \"Mission goal sent to fleet manager.\"}");
-  }
-  /*
-    // TODO to replace with proper action response in ROS2
-    iroc_fleet_manager::GetMissionPointsSrv get_mission_data_service;
-    const auto resp =
-        callService<iroc_fleet_manager::GetMissionPointsSrv>(sc_get_mission_data_, get_mission_data_service.request, get_mission_data_service.response);
-
-    if (!resp.success) {
-      json error_response;
-      error_response["message"]    = resp.message;
-      error_response["success"]    = false;
-      error_response["robot_data"] = json::list();
-      ROS_WARN_STREAM("[IROCBridge]: " << error_response["message"].dump());
-      return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
-    }
-
-    auto mission_goal = get_mission_data_service.response.mission_goal;
-    auto json         = missionGoalToJson(mission_goal);
-    return crow::response(crow::status::CREATED, json.dump());
-  }
-  */
-  catch (const std::exception &e) {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to parse JSON from message: " << e.what());
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Failed to parse JSON from message: " + std::string(e.what()) + "\"}");
+    json error_response;
+    error_response["message"] = std::string("Failed to parse JSON: ") + e.what();
+    return crow::response(crow::status::BAD_REQUEST, error_response.dump());
   }
 }
 
 /**
  * \brief Callback that changes the mission state of the fleet, either starting, stopping, or pausing it.
- *
+ * If starting and a mission is already active (but paused), it resumes via service call instead of sending a new action.
+ * Initial start is sent as an action with empty goal, and fleet manager uses the pre-staged mission + auto-activates.
+ * Start (resume)/stop/pause use the change_fleet_mission_state service, which calls sc_robot_activation on each robot in fleet manager.
+ * Start works both for initial start and resume, stop and pause work for active missions. All return 409 if no mission is staged or executing.
  * \param req Crow request
  * \return res Crow response
  */
 crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] const crow::request &req, const std::string &type) {
-  std::scoped_lock lck(robot_handlers_.mtx);
+  std::scoped_lock lck(robot_handlers_.mtx, mtx_current_goal_handle_);
 
   // Input validation
   if (type != "start" && type != "stop" && type != "pause")
