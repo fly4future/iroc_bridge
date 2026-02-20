@@ -440,28 +440,45 @@ Endpoints for controlling the robot's environment.
 
 ## Missions
 
-The missions are handled by `IROC Fleet Manager`: a node responsible for sending the mission to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
+The missions are handled by `IROC Fleet Manager`: a node responsible for distributing mission goals to the robots, monitoring their progress, and sending the aggregated information to the `IROC Bridge`.
+
+Mission management is split into two explicit phases:
+
+1. **Upload** (`POST /mission`) — synchronous. The fleet manager runs trajectory generation and safety validation on every robot before returning. Errors (bad coordinates, safety violations, unavailable robots) are returned immediately with per-robot detail. If any robot fails, all staged missions are rolled back.
+2. **Execute** (`POST /mission/start`) — asynchronous. Triggers execution on all robots and returns immediately. Real-time feedback flows over the WebSocket `/telemetry` connection. Results are delivered via WebSocket when the mission finishes.
+
+```
+POST /mission         →  Upload & validate (sync)   →  200 OK  or  400/409 with per-robot errors
+POST /mission/start   →  Begin execution  (async)   →  202 Accepted, feedback via WebSocket
+POST /mission/pause   →  Pause all robots            →  202 Accepted
+POST /mission/start   →  Resume all robots           →  202 Accepted
+POST /mission/stop    →  Stop & discard mission      →  202 Accepted
+```
+
+---
+
+### Upload a Mission
 
 - <strong style="color: #49cc90">`POST`</strong>
-  **/mission**  
+  **/mission**
   <span style="color: gray">
-  Set a mission
+  Upload and stage a mission on all robots. Synchronous — blocks until every robot has run trajectory generation and safety checks. Returns per-robot results. Upload is all-or-nothing: if any robot fails, all are rolled back to idle.
   </span>
 
 <figure align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="img/mission_diagram_dark.svg" />
     <source media="(prefers-color-scheme: light)" srcset="img/mission_diagram.svg" />
-    <img src="img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;"> 
+    <img src="img/sequence_diagram.svg" alt="Sequence Diagram" width="450px" style="margin: 0 auto;">
   </picture>
   <figcaption>Mission Sequence Diagram</figcaption>
 </figure>
 
 The mission request requires the following fields:
 
-- **type key** to specify the mission type and the specific details of the mission.
-- **details key** with the specific details for each mission.
-- **Uuid key** for synchronization with the UI.
+- **type**: Mission planner to use (`"WaypointPlanner"`, `"CoveragePlanner"`).
+- **details**: Planner-specific mission parameters.
+- **uuid**: Client-generated identifier for synchronization with the UI.
 
   <details>
   <summary>
@@ -539,7 +556,7 @@ The mission request requires the following fields:
 
   <details>
   <summary>
-  <em> Coverage Planner: Body</em> <span style="color: gray">raw (json)</span>
+  <em> CoveragePlanner: Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
   ```json
@@ -574,181 +591,107 @@ The mission request requires the following fields:
   ```
 
   </details>
-  
+
+---
+
+### Upload Response
+
+All responses from `POST /mission` share the same structure:
+
+- **success**: `true` if all robots staged successfully, `false` otherwise.
+- **message**: General status message.
+- **robot_results**: Array with one entry per robot.
+  - **robot_name**: Robot identifier string.
+  - **success**: Whether this robot staged its mission successfully.
+  - **message**: Per-robot detail (trajectory count on success, error reason on failure).
+
+1. Successful upload — all robots staged
+
   <details>
   <summary>
-  <em> AutonomyTestPlanner: Body</em> <span style="color: gray">raw (json)</span>
+  <em>Body</em> <span style="color: gray">example response (json)</span>
   </summary>
+
+  Status code: **200 OK**
 
   ```json
   {
-    "type": "AutonomyTestPlanner",
-    "uuid": "20ab7a6c-231b-48ed-83cc-864041ae40bd",
-    "details": {
-      "robots": [
-        {
-          "name": "uav1",
-          "segment_length": 5
-        }
-      ]
-    }
+    "success": true,
+    "message": "Mission uploaded to all robots",
+    "robot_results": [
+      {
+        "robot_name": "uav1",
+        "success": true,
+        "message": "Staged 6 trajectories"
+      },
+      {
+        "robot_name": "uav2",
+        "success": true,
+        "message": "Staged 6 trajectories"
+      }
+    ]
   }
   ```
 
   </details>
-  
----
 
-### Mission Response Examples
-
-The result follows the following structure:
-
-- **message**: General message about the status of the mission.
-- **success**: Boolean to denote if the mission was uploaded successfully.
-- **type**: Type of the mission.
-- **uuid**: The UUID of the mission.
-- **robot_data**: An array with details for each robot in the mission.
-  - **robot**: String with the name of the robot.
-  - **message**: Individual robot message.
-  - **success**: Boolean to denote the individual result of the robot.
-  - **mission**: The details of the mission that were loaded into the robot.
-
-1. Successful mission upload
+2. Upload failure — safety validation error (all robots rolled back)
 
   <details>
-   <summary>
-   <em>Body</em> <span style="color: gray"> example response (json)</span>
-   </summary>
-  Code: 201 Created
-  
-   ```json
-   {
-    "robot_data":[
-       {
-          "message": "Mission loaded successfully",
-          "mission":{
-             "frame_id":0,
-             "height_id":0,
-             "points":[
-                {
-                   "x":20,
-                   "y":10,
-                   "heading":1,
-                   "z":3
-                },
-                {
-                   "z":3,
-                   "heading":3,
-                   "y":10,
-                   "x":20
-                },
-                {
-                   "x":-20,
-                   "y":-20,
-                   "heading":3,
-                   "z":4
-                },
-                {
-                   "x":-10,
-                   "y":10,
-                   "heading":3,
-                   "z":5
-                },
-                {
-                   "z":4,
-                   "heading":3,
-                   "y":-10,
-                   "x":10
-                },
-                {
-                   "z":3,
-                   "heading":1,
-                   "y":10,
-                   "x":20
-                }
-             ]
-          },
-          "success": true,
-          "robot" :"uav1"
-       }
-    ],
-    "uuid":"550e8400-e29b-41d4-a716-446655440000",
-    "type": "WaypointPlanner",
-    "message": "Mission uploaded successfully",
-    "success" :true
-   }
-   ```
-  
+  <summary>
+  <em>Body</em> <span style="color: gray">example response (json)</span>
+  </summary>
+
+  Status code: **400 Bad Request**
+
+  ```json
+  {
+    "success": false,
+    "message": "Upload failed on one or more robots",
+    "robot_results": [
+      {
+        "robot_name": "uav1",
+        "success": false,
+        "message": "Trajectory is outside of safety area"
+      },
+      {
+        "robot_name": "uav2",
+        "success": true,
+        "message": "Staged 6 trajectories"
+      }
+    ]
+  }
+  ```
+
   </details>
 
-2. Uploading mission failure due to safety validation.
-<details>
+3. Upload rejected — mission already staged or executing
 
+  <details>
   <summary>
-  <em>Body</em> <span style="color: gray"> example response (json)</span>
+  <em>Body</em> <span style="color: gray">example response (json)</span>
   </summary>
-- Code: 400 Bad Request
 
-- Example value:
+  Status code: **409 Conflict**
 
-```json
-{
-  "robot_data": [
-    {
-      "message": "The given points are valid for: uav1, however the generated trajectory seems to be outside of safety area or within an obstacle.",
-      "mission": [],
-      "success": false,
-      "robot": "uav1"
-    }
-  ],
-  "message": "Failure starting robot clients.",
-  "success": false
-}
-```
+  ```json
+  {
+    "success": false,
+    "message": "Fleet is already executing a mission",
+    "robot_results": []
+  }
+  ```
 
-```json
-{
-  "robot_data": [
-    {
-      "message": "Unvalid trajectory for uav1, trajectory is outside of safety area",
-      "mission": [],
-      "success": false,
-      "robot": "uav1"
-    }
-  ],
-  "message": "Failure starting robot clients.",
-  "success": false
-}
-```
-
-</details>
-
-3. Uploading mission failure due to loaded mission in server.
-<details>
-
-  <summary>
-  <em>Body</em> <span style="color: gray"> example response (json)</span>
-  </summary>
-- Code: 409 Conflict
-
-- Example value:
-
-```json
-{
-  "message": "Mission is already running. Terminate the previous one, or wait until it is finished."
-}
-```
-
-</details>
+  </details>
 
 ---
 
 ### Mission `GET` endpoint
 
 - <strong style="color: #61affe">`GET`</strong>
-  **/mission**  
+  **/mission**
   <span style="color: gray">
-  Retrieve the mission loaded in the server.
+  Retrieve the mission currently staged or executing in the fleet manager.
   </span>
 
   <details>
@@ -756,7 +699,7 @@ The result follows the following structure:
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-  Status code: **202 Accepted**
+  Status code: **200 OK**
 
   ```json
   {
@@ -767,42 +710,12 @@ The result follows the following structure:
           "frame_id": 0,
           "height_id": 0,
           "points": [
-            {
-              "x": 20,
-              "y": 10,
-              "heading": 1,
-              "z": 3
-            },
-            {
-              "z": 3,
-              "heading": 3,
-              "y": 10,
-              "x": 20
-            },
-            {
-              "x": -20,
-              "y": -20,
-              "heading": 3,
-              "z": 4
-            },
-            {
-              "x": -10,
-              "y": 10,
-              "heading": 3,
-              "z": 5
-            },
-            {
-              "z": 4,
-              "heading": 3,
-              "y": -10,
-              "x": 10
-            },
-            {
-              "z": 3,
-              "heading": 1,
-              "y": 10,
-              "x": 20
-            }
+            { "x": 20,  "y": 10,  "z": 3, "heading": 1 },
+            { "x": 20,  "y": 10,  "z": 3, "heading": 3 },
+            { "x": -20, "y": -20, "z": 4, "heading": 3 },
+            { "x": -10, "y": 10,  "z": 5, "heading": 3 },
+            { "x": 10,  "y": -10, "z": 4, "heading": 3 },
+            { "x": 20,  "y": 10,  "z": 3, "heading": 1 }
           ]
         },
         "success": true,
@@ -811,26 +724,25 @@ The result follows the following structure:
     ],
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "type": "WaypointPlanner",
-    "message": "Mission uploaded successfully",
+    "message": "Mission loaded successfully",
     "success": true
   }
   ```
 
   </details>
 
-If there is no active mission, you will get an unsuccessful response, with the message that there is no active mission:
+  If there is no active or staged mission:
 
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
 
-
   ```json
   {
-      "robot_data": [],
-      "success": false,
-      "message": "No active mission."
+    "robot_data": [],
+    "success": false,
+    "message": "No active mission."
   }
   ```
 
@@ -844,58 +756,64 @@ We support both fleet-wide and individual robot mission control.
 
 **Fleet Mission Control**:
 
-These endpoints control the mission status for all assigned robots at once: \
+These endpoints control the mission state for all robots at once.
 
 - <strong style="color: #49cc90">`POST`</strong>
-  **/mission/start**  
+  **/mission/start**
   <span style="color: gray">
-  Start the mission for all robots.
+  Start or resume the mission for all robots.
   </span>
+
+  > **NOTE** \
+  > A mission must be uploaded first via `POST /mission` before calling start. \
+  > If the mission is already executing (e.g. after a pause), calling start again resumes all robots. \
+  > Returns **202 Accepted** immediately. Real-time progress arrives via WebSocket `/telemetry`. The final result is also delivered over WebSocket when the mission finishes.
+
 - <strong style="color: #49cc90">`POST`</strong>
-  **/mission/pause**  
+  **/mission/pause**
   <span style="color: gray">
   Pause the mission for all robots.
   </span>
 - <strong style="color: #49cc90">`POST`</strong>
-  **/mission/stop**  
+  **/mission/stop**
   <span style="color: gray">
-  Stop the mission for all robots.
+  Stop the mission for all robots and discard the staged mission. All robots return to idle.
   </span>
 
 **Robot Mission Control**:
 
-You can also control individual mission robots using these endpoints:
+You can also control individual robots using these endpoints:
 
 - <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/start**  
+  **/robots/{_robot_name_}/mission/start**
    <span style="color: gray">
-  Start the mission for a specific robot.
+  Start or resume the mission for a specific robot.
   </span>
 
   > **NOTE** \
-  > Starting a mission for a single robot will activate that robot while the others remain waiting. You can later use the `/mission/start` endpoint to activate the remaining robots and continue the mission.
+  > Starting a single robot activates it while others remain paused. Use `/mission/start` afterwards to activate the remaining robots.
 
 - <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/pause**  
+  **/robots/{_robot_name_}/mission/pause**
   <span style="color: gray">
   Pause the mission for a specific robot.
   </span>
 - <strong style="color: #49cc90">`POST`</strong>
-  **/robots/{_robot_name_}/mission/stop**  
+  **/robots/{_robot_name_}/mission/stop**
    <span style="color: gray">
   Stop the mission for a specific robot.
   </span>
   > **NOTE** \
-  > Stopping the mission for a single robot will also abort the overall mission and stop all other robots. This behavior is intentional, as the mission assumes the participation of all assigned robots.
+  > Stopping a single robot aborts the overall fleet mission and stops all other robots. This is intentional — the mission assumes the participation of all assigned robots.
 
 ---
 
 ### Feedback
 
-During an active mission, the feedback message is broadcast to the connected clients through a WebSocket in the `/telemetry` path.
+During an active mission (after `POST /mission/start`), periodic feedback is broadcast over the WebSocket `/telemetry` connection.
 
 - <strong style="color: orange">`onmessage`</strong>
-  **Waypoint Mission and Autonomy Test Feedback.**
+  **Mission Feedback**
   <details>
   <summary>
   <em>Message</em> <span style="color: gray">raw (json)</span>
@@ -903,7 +821,7 @@ During an active mission, the feedback message is broadcast to the connected cli
 
   ```json
   {
-    "type": "WaypointMissionFeedback",
+    "type": "MissionFeedback",
     "progress": 0.75,
     "mission_state": "IN_PROGRESS",
     "message": "EXECUTING",
@@ -936,19 +854,16 @@ During an active mission, the feedback message is broadcast to the connected cli
 
   </details>
 
-> **NOTE** \
-> Autonomy test follows the same structure as the waypoint mission feedback, but it will always contain only one robot.
-
 ---
 
 ### Result
 
-When a mission is finished, the result message will be sent to
+When a mission finishes (success or failure), the result is delivered via HTTP POST from the bridge to the client server at:
 
 <strong style="color: #49cc90">`POST`</strong>
-**http://server:8000/api/missions/result**  
+**http://\<client_url\>:\<client_port\>/api/mission/results**
 <span style="color: gray">
-Send the result of the mission.
+The client URL and port are configured in the bridge's config file (`iroc_bridge/client_url`, `iroc_bridge/client_port`).
 </span>
 
 <details>
@@ -959,7 +874,7 @@ Send the result of the mission.
 ```json
 {
   "success": true,
-  "message": "All robots finished successfully",
+  "message": "All robots finished successfully, mission finished",
   "robot_results": [
     {
       "robot_name": "uav1",
