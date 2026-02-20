@@ -695,6 +695,7 @@ void IROCBridge::parseGeneralRobotInfo(mrs_robot_diagnostics::GeneralRobotInfo::
   json json_msg = {
       {"robot_name", general_robot_info->robot_name},
       {"robot_type", general_robot_info->robot_type},
+      {"robot_ip_address", general_robot_info->robot_ip_address},
       {"battery_state",
        {{"voltage", general_robot_info->battery_state.voltage},
         {"percentage", general_robot_info->battery_state.percentage},
