@@ -805,7 +805,7 @@ void IROCBridge::parseSensorInfo(mrs_robot_diagnostics::SensorInfo::ConstPtr sen
   }
   json telemetry_msg = {
       {"robot_name", robot_name},
-      {"type", sensor_info->type},
+      {"sensor_type", sensor_info->type},
       {"details", json_msg}};
 
   sendTelemetryJsonMessage("SensorInfo", telemetry_msg);
