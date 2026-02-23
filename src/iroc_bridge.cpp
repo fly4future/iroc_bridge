@@ -1417,36 +1417,22 @@ crow::response IROCBridge::getObstaclesCallback([[maybe_unused]] const crow::req
     json_msg["message"]      = response->message;
     auto obstacles           = response->obstacles;
     json obstacles_json_list = json::list();
-    // size_t point_index       = 0;
 
-    // TODO update with new obstacle structure in fleet manager
-    /*
     for (const auto &obstacles : response->obstacles) {
-    }
-
-    for (size_t i = 0; i < number_of_obstacles; i++) {
-      int number_of_vertices = obstacles.rows.at(i);
-      double max_z           = obstacles.max_z.at(i);
-      double min_z           = obstacles.min_z.at(i);
-
-      // Extract the points for the obstacle
       json points_list = json::list();
-      for (int j = 0; j < number_of_vertices; j++) {
-        if (point_index < obstacles.data.size()) {
-          json point     = {{"x", obstacles.data.at(point_index).x}, {"y", obstacles.data.at(point_index).y}};
-          points_list[j] = std::move(point);
-          point_index++; // Move to next point
-        }
+      for (const auto &point : obstacles.points) {
+        json point_json                 = {{"x", point.x}, {"y", point.y}};
+        points_list[points_list.size()] = std::move(point_json);
       }
-
-      json obstacle_json     = {{"points", points_list},
-                                {"max_z", max_z},
-                                {"min_z", min_z},
-                                {"frame_id", getFrameID(obstacles.horizontal_frame)},
-                                {"height_id", getFrameID(obstacles.vertical_frame)}};
-      obstacles_json_list[i] = std::move(obstacle_json);
+      json obstacle_json = {{"points", points_list},
+                            {"max_z", obstacles.max_z},
+                            {"min_z", obstacles.min_z},
+                            {"frame_id", getFrameID(obstacles.horizontal_frame)},
+                            {"height_id", getFrameID(obstacles.vertical_frame)}};
+      // Add the obstacle JSON to the list of obstacles
+      obstacles_json_list[obstacles_json_list.size()] = std::move(obstacle_json);
     }
-    */
+
     json json_msg = {{"message", "All robots in the fleet with the same obstacles"}, {"obstacles", obstacles_json_list}};
     return crow::response(crow::status::ACCEPTED, json_msg.dump());
   }
