@@ -26,7 +26,7 @@
 
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include <mrs_msgs/srv/string.hpp>
+#include <iroc_fleet_manager/srv/change_fleet_mission_state_srv.hpp>
 #include <mrs_msgs/srv/reference_stamped_srv.hpp>
 #include <mrs_msgs/srv/set_safety_border_srv.hpp>
 #include <mrs_msgs/srv/velocity_reference_stamped_srv.hpp>
@@ -45,6 +45,7 @@
 // General includes
 #include <unistd.h>
 #include <iostream>
+#include <unordered_map>
 #include <httplib/httplib.h>
 #include <string>
 #include "crow.h"
@@ -172,7 +173,7 @@ private:
   void timerMain();
 
   // | ----------------------- ROS Clients ----------------------- |
-  mrs_lib::ServiceClientHandler<mrs_msgs::srv::String> sc_change_fleet_mission_state_;
+  mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::ChangeFleetMissionStateSrv> sc_change_fleet_mission_state_;
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv> sc_change_robot_mission_state_;
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetWorldOriginSrv> sc_get_world_origin_;
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetSafetyBorderSrv> sc_get_safety_border_;
@@ -464,7 +465,8 @@ void IROCBridge::initialize() {
   }
 
   shopts.no_message_timeout      = mrs_lib::no_timeout;
-  sc_change_fleet_mission_state_ = mrs_lib::ServiceClientHandler<mrs_msgs::srv::String>(node_, "~/change_fleet_mission_state_svc_in", cbkgrp_sc_);
+  sc_change_fleet_mission_state_ =
+      mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::ChangeFleetMissionStateSrv>(node_, "~/change_fleet_mission_state_svc_in", cbkgrp_sc_);
   sc_change_robot_mission_state_ =
       mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv>(node_, "~/change_robot_mission_state_svc_in", cbkgrp_sc_);
   sc_get_world_origin_     = mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetWorldOriginSrv>(node_, "~/get_world_origin_svc_in", cbkgrp_sc_);
@@ -1561,13 +1563,24 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
  * \return res Crow response
  */
 crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] const crow::request &req, const std::string &type) {
+  using FleetReq = iroc_fleet_manager::srv::ChangeFleetMissionStateSrv::Request;
+
+  // Translate URL string → typed enum at the HTTP boundary.
+  static const std::unordered_map<std::string, uint8_t> kTypeMap = {
+      {"start", FleetReq::TYPE_START},
+      {"pause", FleetReq::TYPE_PAUSE},
+      {"stop",  FleetReq::TYPE_STOP},
+  };
+
+  const auto it = kTypeMap.find(type);
+  if (it == kTypeMap.end())
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Unknown operation: " + type + "\"}");
+
+  const uint8_t op_type = it->second;
+
   std::scoped_lock lck(robot_handlers_.mtx, mtx_current_goal_handle_);
 
-  // Input validation
-  if (type != "start" && type != "stop" && type != "pause")
-    return crow::response(crow::status::NOT_FOUND);
-
-  if (type == "start") {
+  if (op_type == FleetReq::TYPE_START) {
     // If the fleet manager action is already live (mission running but paused),
     // resume via the change_fleet_mission_state service — fleet manager calls
     // sc_robot_activation on each robot.  Otherwise send a new action (initial
@@ -1577,9 +1590,9 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       const bool is_alive = (status == rclcpp_action::GoalStatus::STATUS_ACCEPTED || status == rclcpp_action::GoalStatus::STATUS_EXECUTING);
       if (is_alive) {
         RCLCPP_INFO_STREAM(node_->get_logger(), "Mission already active — resuming via service.");
-        auto request    = std::make_shared<mrs_msgs::srv::String::Request>();
-        request->value  = "start";
-        const auto resp = callService<mrs_msgs::srv::String>(sc_change_fleet_mission_state_, request);
+        auto request   = std::make_shared<FleetReq>();
+        request->type  = FleetReq::TYPE_START;
+        const auto resp = callService<iroc_fleet_manager::srv::ChangeFleetMissionStateSrv>(sc_change_fleet_mission_state_, request);
         if (!resp.success)
           return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + resp.message + "\"}");
         return crow::response(crow::status::ACCEPTED, "{\"message\": \"Mission resumed.\"}");
@@ -1619,10 +1632,10 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
     return crow::response(crow::status::ACCEPTED, "{\"message\": \"Mission start command sent.\"}");
   }
 
-  // For stop/pause: use existing service
-  std::shared_ptr<mrs_msgs::srv::String::Request> request = std::make_shared<mrs_msgs::srv::String::Request>();
-  request->value                                          = type;
-  const auto resp                                         = callService<mrs_msgs::srv::String>(sc_change_fleet_mission_state_, request);
+  // pause / stop: forward to fleet manager service
+  auto request  = std::make_shared<FleetReq>();
+  request->type = op_type;
+  const auto resp = callService<iroc_fleet_manager::srv::ChangeFleetMissionStateSrv>(sc_change_fleet_mission_state_, request);
   if (!resp.success)
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + resp.message + "\"}");
   else
@@ -1636,35 +1649,39 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
  * \return res Crow response
  */
 crow::response IROCBridge::changeRobotMissionStateCallback([[maybe_unused]] const crow::request &req, const std::string &robot_name, const std::string &type) {
+  using RobotReq = iroc_fleet_manager::srv::ChangeRobotMissionStateSrv::Request;
+
+  // Translate URL string → typed enum at the HTTP boundary.
+  static const std::unordered_map<std::string, uint8_t> kTypeMap = {
+      {"start", RobotReq::TYPE_START},
+      {"pause", RobotReq::TYPE_PAUSE},
+      {"stop",  RobotReq::TYPE_STOP},
+  };
+
+  const auto it = kTypeMap.find(type);
+  if (it == kTypeMap.end())
+    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Unknown operation: " + type + "\"}");
+
   std::scoped_lock lck(robot_handlers_.mtx);
 
-  // Input validation
-  if (type != "start" && type != "stop" && type != "pause")
-    return crow::response(crow::status::NOT_FOUND);
   if (!std::any_of(robot_handlers_.handlers.begin(), robot_handlers_.handlers.end(), [&robot_name](const auto &rh) { return rh.robot_name == robot_name; }))
-    return crow::response(crow::status::NOT_FOUND, "Robot not found");
+    return crow::response(crow::status::NOT_FOUND, "{\"message\": \"Robot not found: " + robot_name + "\"}");
 
   json json_msg;
-
-  std::shared_ptr<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv::Request> request =
-      std::make_shared<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv::Request>();
-
+  auto request        = std::make_shared<RobotReq>();
   request->robot_name = robot_name;
-  request->type       = type;
+  request->type       = it->second;
 
   const auto resp = callService<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state_, request);
 
   if (!resp.success) {
-    json_msg["message"] = "Call was not successful with message: " + resp.message;
+    json_msg["message"] = "Call was not successful: " + resp.message;
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
-
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
-  } else {
-    json_msg["message"] = "Call successful";
-    return crow::response(crow::status::ACCEPTED, json_msg.dump());
   }
 
-  return crow::response(crow::status::NOT_FOUND);
+  json_msg["message"] = "Call successful";
+  return crow::response(crow::status::ACCEPTED, json_msg.dump());
 }
 
 /*!
