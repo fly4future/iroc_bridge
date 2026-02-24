@@ -1664,7 +1664,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       RCLCPP_WARN_STREAM(node_->get_logger(), "Mission start rejected by fleet manager.");
       json resp;
       resp["success"] = false;
-      resp["message"] = "Mission start rejected by fleet manager. Ensure a mission is uploaded first.";
+      resp["message"] = "Mission start rejected by fleet manager. Ensure no mission is currently running and a mission is uploaded first.";
       return crow::response(crow::status::CONFLICT, resp.dump());
     }
 
