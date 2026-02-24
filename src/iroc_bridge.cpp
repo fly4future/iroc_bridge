@@ -201,6 +201,7 @@ class IROCBridge : public nodelet::Nodelet {
 
   void sendJsonMessage(const std::string& msg_type, json& json_msg);
   void sendTelemetryJsonMessage(const std::string& type, json& json_msg);
+  void sendFeedbackJsonMessage(json& json_msg);
   robot_handler_t* findRobotHandler(const std::string& robot_name, robot_handlers_t& robot_handlers);
 
   ros::ServiceClient* getServiceClient(IROCBridge::robot_handler_t* rh_ptr, const IROCBridge::CommandType command_type);
@@ -251,6 +252,8 @@ class IROCBridge : public nodelet::Nodelet {
   std::mutex mtx_telemetry_connections_;
 
   std::unique_ptr<FleetManagerActionClient> fleet_manager_action_client_;
+  crow::websocket::connection* active_feedback_connection_ = nullptr;
+  std::mutex mtx_feedback_connections_;
 
   // Latlon origin
   mrs_msgs::Point2D world_origin_;
@@ -382,6 +385,22 @@ void IROCBridge::onInit() {
         std::scoped_lock lock(mtx_telemetry_connections_);
         if (active_telemetry_connection_ == &conn) {
           active_telemetry_connection_ = nullptr;
+        }
+      });
+  // Telemetry websocket
+  CROW_WEBSOCKET_ROUTE(http_srv_, "/mission/feedback")
+      .onopen([&](crow::websocket::connection& conn) {
+        ROS_INFO_STREAM("[IROCBridge]: New feedback websocket connection: " << &conn);
+        ROS_INFO_STREAM("[IROCBridge]: New feedback websocket connection: " << conn.get_remote_ip());
+        std::scoped_lock lock(mtx_feedback_connections_);
+        active_feedback_connection_ = &conn;
+      })
+      .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
+        ROS_INFO_STREAM("[IROCBridge]: Feedback websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        ROS_INFO_STREAM("[IROCBridge]: Feedback websocket connection " << &conn << " closed: " << reason);
+        std::scoped_lock lock(mtx_feedback_connections_);
+        if (active_feedback_connection_ == &conn) {
+          active_feedback_connection_ = nullptr;
         }
       });
 
@@ -645,7 +664,7 @@ void IROCBridge::missionFeedbackCallback(const boost::shared_ptr<const Feedback>
   // Create the main JSON message
   json json_msg = {{"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
 
-  sendTelemetryJsonMessage("MissionFeedback", json_msg);
+  sendFeedbackJsonMessage(json_msg);
 }
 
 void IROCBridge::missionFeedbackCallback(iroc_fleet_manager::IROCFleetManagerActionFeedback::ConstPtr msg) {
@@ -681,7 +700,7 @@ void IROCBridge::missionFeedbackCallback(iroc_fleet_manager::IROCFleetManagerAct
   // Create the main JSON message
   json json_msg = {{"progress", msg->feedback.info.progress}, {"mission_state", msg->feedback.info.state}, {"message", msg->feedback.info.message}, {"robots", json_msgs}};
 
-  sendTelemetryJsonMessage("MissionFeedback", json_msg);
+  sendFeedbackJsonMessage(json_msg);
 }
 //}
 
@@ -884,6 +903,21 @@ void IROCBridge::sendTelemetryJsonMessage(const std::string& type, json& json_ms
     } catch (const std::exception& e) {
       ROS_WARN_STREAM("Websocket send_text failed, removing connection: " << e.what());
       active_telemetry_connection_ = nullptr;
+    }
+  }
+}
+//}
+
+/* sendFeedbackJsonMessage() //{ */
+void IROCBridge::sendFeedbackJsonMessage(json& json_msg) {
+  std::string message = json_msg.dump();
+
+  if (active_feedback_connection_) {
+    try {
+      active_feedback_connection_->send_text(message);
+    } catch (const std::exception& e) {
+      ROS_WARN_STREAM("Websocket send_text failed, removing connection: " << e.what());
+      active_feedback_connection_ = nullptr;
     }
   }
 }
