@@ -38,6 +38,7 @@ set(DEPENDENCIES
   mrs_lib
   mrs_robot_diagnostics
   iroc_fleet_manager
+  iroc_common
   sensor_msgs
 )
 
@@ -73,6 +74,7 @@ target_link_libraries(IROCBridge
     mrs_lib::mrs_lib
     mrs_robot_diagnostics::mrs_robot_diagnostics
     iroc_fleet_manager::iroc_fleet_manager
+    iroc_common::iroc_common
     ${iroc_fleet_manager_TARGETS}
     ${mrs_msgs_TARGETS}
     ${sensor_msgs_TARGETS}

@@ -26,6 +26,7 @@
   <depend>mrs_lib</depend>
   <depend>mrs_robot_diagnostics</depend>
   <depend>iroc_fleet_manager</depend>
+  <depend>iroc_common</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

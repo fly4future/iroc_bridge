@@ -42,6 +42,9 @@
 
 #include <mrs_robot_diagnostics/enums/robot_type.h>
 
+#include <iroc_common/result.h>
+#include <iroc_common/call_service.h>
+
 // General includes
 #include <unistd.h>
 #include <iostream>
@@ -94,11 +97,7 @@ private:
 
   std::unique_ptr<httplib::Client> http_client_;
 
-  struct result_t
-  {
-    bool success;
-    std::string message;
-  };
+  using result_t = iroc_common::result_t;
 
   struct action_result_t
   {
@@ -815,49 +814,16 @@ void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_ms
 }
 
 template <typename ServiceType>
-IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request) {
-
-  auto response = sc.callSync(request);
-
-  if (response) {
-    if (response.value()->success) {
-      RCLCPP_INFO_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000,
-                                  "Called service " << sc.getService() << "  with response \"" << response.value()->message << "\".");
-      return {true, response.value()->message};
-    } else {
-      RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000,
-                                  "Called service " << sc.getService() << "with response \"" << response.value()->message << "\".");
-      return {false, response.value()->message};
-    }
-  } else {
-    const std::string msg = std::string("Failed to call service ") + sc.getService() + ".";
-    RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, msg);
-    return {false, msg};
-  }
+IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc,
+                                             const std::shared_ptr<typename ServiceType::Request> &request) {
+  return iroc_common::callService(sc, request, node_->get_logger(), clock_);
 }
 
 template <typename ServiceType>
-IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
+IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc,
+                                             const std::shared_ptr<typename ServiceType::Request> &request,
                                              const std::shared_ptr<typename ServiceType::Response> &response) {
-  auto temp_response = sc.callSync(request);
-
-  if (temp_response) {
-    if (temp_response.value()->success) {
-      RCLCPP_INFO_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000,
-                                  "Called service " << sc.getService() << " with response \"" << temp_response.value()->message << "\".");
-      *response = *(temp_response.value());
-      return {true, temp_response.value()->message};
-    } else {
-      RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000,
-                                  "Called service " << sc.getService() << " with response \"" << temp_response.value()->message << "\".");
-      *response = *(temp_response.value());
-      return {false, temp_response.value()->message};
-    }
-  } else {
-    const std::string msg = std::string("Failed to call service ") + sc.getService() + ".";
-    RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, msg);
-    return {false, msg};
-  }
+  return iroc_common::callService(sc, request, response, node_->get_logger(), clock_);
 }
 
 void IROCBridge::routine_death_check() {
