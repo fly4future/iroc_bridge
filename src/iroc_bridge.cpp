@@ -1232,9 +1232,6 @@ crow::response IROCBridge::getSafetyBorderCallback([[maybe_unused]] const crow::
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
     return crow::response(crow::status::CONFLICT, json_msg.dump());
   } else {
-
-    return crow::response(crow::status::NOT_IMPLEMENTED, "getSafetyBorderCallback not implemented yet");
-
     json_msg["message"]          = response->message;
     json points                  = json::list();
     auto vector_points           = response->border.points;
@@ -1380,9 +1377,6 @@ crow::response IROCBridge::getObstaclesCallback([[maybe_unused]] const crow::req
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
     return crow::response(crow::status::CONFLICT, json_msg.dump());
   } else {
-
-    return crow::response(crow::status::NOT_IMPLEMENTED, "{\"message\": \"getObstaclesCallback not implemented yet in fleet manager.\"}");
-
     json_msg["message"]      = response->message;
     auto obstacles           = response->obstacles;
     json obstacles_json_list = json::list();

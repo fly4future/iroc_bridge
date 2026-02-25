@@ -15,16 +15,19 @@ The requests and responses are in JSON format.
 Endpoints for controlling the robots.
 
 - <strong style="color: #61affe">`GET`</strong>
-  **/robots**  
+  **/robots**
   <span style="color: gray">
   List available robots.
   </span>
 
-  <details> 
+  > **NOTE** \
+  > Only robots from which at least one `GeneralRobotInfo` telemetry message has been received are listed. Robots that have not yet published telemetry will not appear in this response.
+
+  <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
-   
+
   ```json
     [
       {
@@ -111,7 +114,7 @@ Endpoints for controlling the robot's environment.
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
    
-  We currently only support `frame_id` in LATLON (`id`: 0) 
+  The `frame_id` field is accepted but ignored — the world origin is always stored in LATLON frame regardless of the value supplied.
    
   ```json
   {
@@ -138,9 +141,9 @@ Endpoints for controlling the robot's environment.
 
   ```json
   {
-    "frame_id": 0,
     "x": 47.397978,
-    "y": 8.545299
+    "y": 8.545299,
+    "message": "World origin retrieved successfully"
   }
   ```
 
@@ -665,7 +668,26 @@ All responses from `POST /mission` share the same structure:
 
   </details>
 
-3. Upload rejected — mission already staged or executing
+3. Upload rejected — mission already staged
+
+  <details>
+  <summary>
+  <em>Body</em> <span style="color: gray">example response (json)</span>
+  </summary>
+
+  Status code: **409 Conflict**
+
+  ```json
+  {
+    "success": false,
+    "message": "Mission already staged, stop or unload first",
+    "robot_results": []
+  }
+  ```
+
+  </details>
+
+4. Upload rejected — mission already executing or paused
 
   <details>
   <summary>
@@ -731,12 +753,14 @@ All responses from `POST /mission` share the same structure:
 
   </details>
 
-  If there is no active or staged mission:
+  If there is no active or staged mission, or if the fleet manager service is unavailable:
 
   <details>
   <summary>
   <em>Body</em> <span style="color: gray">raw (json)</span>
   </summary>
+
+  Status code: **500 Internal Server Error**
 
   ```json
   {
@@ -768,6 +792,10 @@ These endpoints control the mission state for all robots at once.
   > A mission must be uploaded first via `POST /mission` before calling start. \
   > If the mission is already executing (e.g. after a pause), calling start again resumes all robots. \
   > Returns **202 Accepted** immediately. Real-time progress arrives via WebSocket `/telemetry`. The final result is also delivered over WebSocket when the mission finishes.
+  >
+  > **Error codes:**
+  > - **409 Conflict** — if the fleet action server is unavailable or the goal is rejected (e.g. already active).
+  > - **500 Internal Server Error** — if the bridge times out waiting for goal acceptance.
 
 - <strong style="color: #49cc90">`POST`</strong>
   **/mission/pause**
@@ -810,7 +838,7 @@ You can also control individual robots using these endpoints:
 
 ### Feedback
 
-During an active mission (after `POST /mission/start`), periodic feedback is broadcast over the WebSocket `/telemetry` connection.
+During an active mission (after `POST /mission/start`), periodic feedback is broadcast over the WebSocket `/telemetry` connection. Feedback is broadcast in both `EXECUTING` and `PAUSED` states.
 
 - <strong style="color: orange">`onmessage`</strong>
   **Mission Feedback**
@@ -823,12 +851,12 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
   {
     "type": "MissionFeedback",
     "progress": 0.75,
-    "mission_state": "IN_PROGRESS",
-    "message": "EXECUTING",
+    "mission_state": "mission_executing",
+    "message": "Mission in progress",
     "robots": [
       {
         "robot_name": "uav1",
-        "message": "EXECUTING",
+        "message": "Executing trajectory",
         "mission_progress": 0.6,
         "current_goal": 2,
         "distance_to_goal": 15.3,
@@ -839,7 +867,7 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
       },
       {
         "robot_name": "uav2",
-        "message": "EXECUTING",
+        "message": "Executing trajectory",
         "mission_progress": 0.45,
         "current_goal": 1,
         "distance_to_goal": 5.7,
@@ -851,6 +879,17 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
     ]
   }
   ```
+
+  The `mission_state` field reflects the current fleet mission state and takes one of the following string values:
+
+  | `mission_state` | Meaning |
+  |---|---|
+  | `"trajectories_loaded"` | Mission staged, waiting for start command |
+  | `"mission_executing"` | Mission actively running |
+  | `"mission_paused"` | Mission paused (all robots holding position) |
+  | `"mission_aborted"` | Mission was stopped or cancelled |
+  | `"mission_invalid"` | Mission failed validation |
+  | `"mission_error"` | Unexpected error during execution |
 
   </details>
 
@@ -1299,63 +1338,61 @@ Robot's data and status can be received periodically in the `/telemetry` path.
 
   ```json
   {
-  "type": "SensorInfo"
-  "robot_name": "uav1"
-  "details": {
-    "type": 7,
-    "camera_frame_tf": {
-      "rotation_rpy": {
-        "pitch": -0.000007,
-        "roll": -0.038402,
-        "yaw": 0
+    "type": "SensorInfo",
+    "robot_name": "uav1",
+    "sensor_type": 7,
+    "details": {
+      "camera_frame_tf": {
+        "rotation_rpy": {
+          "pitch": -0.000007,
+          "roll": -0.038402,
+          "yaw": 0
+        },
+        "translation": {
+          "x": 0.09669,
+          "y": 0.002004,
+          "z": -0.060549
+        }
       },
-      "translation": {
-        "x": 0.09669,
-        "y": 0.002004,
-        "z": -0.060549
-      }
-    },
-    "camera_info": {
-      "fov_x_rad": 1.92,
-      "fov_y_rad": 1.353683,
-      "height": 1080,
-      "width": 1920
-    },
-    "camera_orientation": {
-      "orientation_rpy": {
-        "pitch": -0.000007,
-        "roll": -0.038402,
-        "yaw": 0
-      }
-    },
-    "optical_frame_tf": {
-      "rotation_rpy": {
-        "pitch": -0.038402,
-        "roll": -1.570789,
-        "yaw": -1.570796
+      "camera_info": {
+        "fov_x_rad": 1.92,
+        "fov_y_rad": 1.353683,
+        "height": 1080,
+        "width": 1920
       },
-      "translation": {
-        "x": 0.09669,
-        "y": 0.002004,
-        "z": -0.060549
+      "camera_orientation": {
+        "orientation_rpy": {
+          "pitch": -0.000007,
+          "roll": -0.038402,
+          "yaw": 0
+        }
+      },
+      "optical_frame_tf": {
+        "rotation_rpy": {
+          "pitch": -0.038402,
+          "roll": -1.570789,
+          "yaw": -1.570796
+        },
+        "translation": {
+          "x": 0.09669,
+          "y": 0.002004,
+          "z": -0.060549
+        }
       }
     }
-  },
-  "type": "SensorInfo"
   }
   ```
 
-  >NOTE: The `type` field in the `details` object indicates the sensor type (e.g., 7 for camera).
-  > The available sensor types are defined in the `mrs_robot_diagnostics/SensorStatus` message.
-  > The available types are:
-    > - 0: Autopilot
-    > - 1: Rangefinder
-    > - 2: GPS
-    > - 3: IMU
-    > - 4: Barometer
-    > - 5: Magnetometer
-    > - 6: LIDAR
-    > - 7: camera
+  > **NOTE:** The top-level `sensor_type` field is a numeric code indicating the sensor type (e.g., `7` for camera).
+  > The available sensor types are defined in the `mrs_robot_diagnostics/SensorStatus` message:
+  > - 0: Autopilot
+  > - 1: Rangefinder
+  > - 2: GPS
+  > - 3: IMU
+  > - 4: Barometer
+  > - 5: Magnetometer
+  > - 6: LIDAR
+  > - 7: Camera
 
     </details>
 
