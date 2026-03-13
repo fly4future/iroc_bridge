@@ -198,6 +198,7 @@ private:
   void parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSharedPtr uav_info, const std::string &robot_name);
 
   void sendJsonMessage(const std::string &msg_type, json &json_msg);
+  void sendFeedbackJsonMessage(json& json_msg);
   void sendTelemetryJsonMessage(const std::string &type, json &json_msg);
   robot_handler_t *findRobotHandler(const std::string &robot_name, robot_handlers_t &robot_handlers);
 
@@ -239,6 +240,8 @@ private:
   void routine_death_check();
   crow::websocket::connection *active_telemetry_connection_ = nullptr;
   std::mutex mtx_telemetry_connections_;
+  crow::websocket::connection *active_feedback_connection_ = nullptr;
+  std::mutex mtx_feedback_connections_;
 
   std::shared_ptr<MissionClient> mission_client_;
   MissionGoalHandle::SharedPtr current_goal_handle_;
@@ -376,6 +379,23 @@ void IROCBridge::initialize() {
         std::scoped_lock lock(mtx_telemetry_connections_);
         if (active_telemetry_connection_ == &conn) {
           active_telemetry_connection_ = nullptr;
+        }
+      });
+  // Feedback websocket
+  CROW_WEBSOCKET_ROUTE(http_srv_, "/mission/feedback")
+      .onopen([&](crow::websocket::connection& conn) {
+        RCLCPP_INFO_STREAM(node_->get_logger(), "New feedback websocket connection: " << &conn);
+        RCLCPP_INFO_STREAM(node_->get_logger(), "New feedback websocket connection: " << conn.get_remote_ip());
+        std::scoped_lock lock(mtx_feedback_connections_);
+        active_feedback_connection_ = &conn;
+      })
+      .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
+        RCLCPP_INFO_STREAM(node_->get_logger(),
+                           "Feedback websocket connection " << conn.get_remote_ip() << " closed: " << reason);
+        RCLCPP_INFO_STREAM(node_->get_logger(), "Feedback websocket connection " << &conn << " closed: " << reason);
+        std::scoped_lock lock(mtx_feedback_connections_);
+        if (active_feedback_connection_ == &conn) {
+          active_feedback_connection_ = nullptr;
         }
       });
 
@@ -626,7 +646,7 @@ void IROCBridge::missionFeedbackCallback(const Mission::Feedback::ConstSharedPtr
   // Create the main JSON message
   json json_msg = {{"progress", feedback->info.progress}, {"mission_state", feedback->info.state}, {"message", feedback->info.message}, {"robots", json_msgs}};
 
-  sendTelemetryJsonMessage("MissionFeedback", json_msg);
+  sendFeedbackJsonMessage(json_msg);
 }
 
 // --------------------------------------------------------------
@@ -799,7 +819,6 @@ void IROCBridge::sendJsonMessage(const std::string &msg_type, json &json_msg) {
 }
 
 void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_msg) {
-
   json_msg["type"]    = type;
   std::string message = json_msg.dump();
 
@@ -810,6 +829,20 @@ void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_ms
     catch (const std::exception &e) {
       RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Websocket send_text failed, removing connection: " << e.what());
       active_telemetry_connection_ = nullptr;
+    }
+  }
+}
+
+void IROCBridge::sendFeedbackJsonMessage(json& json_msg) {
+  std::string message = json_msg.dump();
+
+  if (active_feedback_connection_) {
+    try {
+      active_feedback_connection_->send_text(message);
+    } catch (const std::exception& e) {
+      RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000,
+                                  "Websocket send_text failed, removing connection: " << e.what());
+      active_feedback_connection_ = nullptr;
     }
   }
 }
