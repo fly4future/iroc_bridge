@@ -209,7 +209,6 @@ private:
                                 const std::shared_ptr<typename ServiceType::Request> &request);
 
   // REST API callbacks
-  crow::response pathCallback(const crow::request &req);
   crow::response setOriginCallback(const crow::request &req);
   crow::response getOriginCallback(const crow::request &req);
   crow::response setSafetyBorderCallback(const crow::request &req);
@@ -315,8 +314,6 @@ void IROCBridge::initialize() {
   http_client_ = std::make_unique<httplib::Client>(client_url, client_port);
 
   // HTTP Server
-  // Do we need this (set_path)?
-  CROW_ROUTE(http_srv_, "/set_path").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return pathCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setObstacleCallback(req); });
@@ -1021,70 +1018,6 @@ json missionGoalToJson(const iroc_fleet_manager::msg::MissionGoal &mission_goal)
 // --------------------------------------------------------------
 
 /**
- * \brief Callback for the path endpoint. It parses the JSON message and publishes it to the corresponding robot handler.
- *
- * \param req The HTTP request containing the JSON message.
- * \return A response indicating the success or failure of the operation.
- */
-crow::response IROCBridge::pathCallback(const crow::request &request) {
-  RCLCPP_INFO_STREAM(node_->get_logger(), "Parsing a path message JSON -> ROS.");
-
-  crow::json::rvalue json_msg = crow::json::load(request.body);
-  if (!json_msg) {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "Bad json input: " << request.body);
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad json input: " + request.body + "\"}");
-  }
-
-  std::string robot_name = json_msg["robot_name"].s();
-  std::scoped_lock lck(robot_handlers_.mtx);
-  auto *rh_ptr = findRobotHandler(robot_name, robot_handlers_);
-  if (!rh_ptr) {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "Robot \"" << robot_name << "\" not found. Ignoring.");
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Robot \"" + robot_name + "\" not found, ignoring\"}");
-  }
-
-  std::string frame_id = json_msg["frame_id"].s();
-  if (frame_id.empty()) {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "Bad frame_id input: Expected a string.");
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad frame_id input: Expected a string.\"}");
-  }
-
-  std::vector<crow::json::rvalue> points = json_msg["points"].lo();
-  if (points.empty()) {
-    // ROS_WARN_STREAM("[IROCBridge]: Bad points input: Expected an array.");
-    RCLCPP_WARN_STREAM(node_->get_logger(), "Bad points input: Expected an array.");
-    return crow::response(crow::status::BAD_REQUEST, "{\"message\": \"Bad points input: Expected an array.\"}");
-  }
-
-  mrs_msgs::msg::Path msg_path;
-  msg_path.points.reserve(points.size());
-  msg_path.header.stamp    = clock_->now();
-  msg_path.header.frame_id = frame_id;
-  msg_path.fly_now         = true;
-  msg_path.use_heading     = false;
-
-  for (const auto &el : points) {
-    mrs_msgs::msg::Reference ref;
-    ref.position.x = el["x"].d();
-    ref.position.y = el["y"].d();
-    ref.position.z = el["z"].d();
-
-    if (el.has("heading")) {
-      ref.heading          = el["heading"].d();
-      msg_path.use_heading = true;
-    }
-
-    msg_path.points.push_back(ref);
-  }
-
-  // Publish the path
-  rh_ptr->pub_path.publish(msg_path);
-
-  RCLCPP_INFO_STREAM(node_->get_logger(), "Set a path with " << points.size() << " length.");
-  return crow::response(crow::status::OK, "{\"message\": \"Set a path with " + std::to_string(points.size()) + " length.\"}");
-}
-
-/**
  * \brief Callback for the set safety border request. It receives a list of points and sends them to the fleet manager.
  *
  * \param req Crow request
@@ -1146,12 +1079,12 @@ crow::response IROCBridge::getOriginCallback([[maybe_unused]] const crow::reques
   if (!result.success) {
     json_msg["message"] = "Call was not successful with message: " + result.message;
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
-    return crow::response(crow::status::CONFLICT, json_msg.dump());
+    return crow::response(crow::status::CONFLICT, json_msg);
   } else {
     json_msg["message"] = response->message;
     json_msg["x"]       = response->origin_x;
     json_msg["y"]       = response->origin_y;
-    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+    return crow::response(crow::status::ACCEPTED, json_msg);
   }
 }
 
@@ -1264,7 +1197,7 @@ crow::response IROCBridge::getSafetyBorderCallback([[maybe_unused]] const crow::
   if (!result.success) {
     json_msg["message"] = "Call was not successful with message: " + result.message;
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
-    return crow::response(crow::status::CONFLICT, json_msg.dump());
+    return crow::response(crow::status::CONFLICT, json_msg);
   } else {
     json_msg["message"]          = response->message;
     json points                  = json::list();
@@ -1287,7 +1220,7 @@ crow::response IROCBridge::getSafetyBorderCallback([[maybe_unused]] const crow::
                      {"frame_id", getFrameID(horizontal_frame)},
                      {"height_id", getFrameID(vertical_frame)}};
 
-    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+    return crow::response(crow::status::ACCEPTED, json_msg);
   }
 }
 
@@ -1409,7 +1342,7 @@ crow::response IROCBridge::getObstaclesCallback([[maybe_unused]] const crow::req
   if (!result.success) {
     json_msg["message"] = "Call was not successful with message: " + result.message;
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
-    return crow::response(crow::status::CONFLICT, json_msg.dump());
+    return crow::response(crow::status::CONFLICT, json_msg);
   } else {
     json_msg["message"]      = response->message;
     auto obstacles           = response->obstacles;
@@ -1431,7 +1364,7 @@ crow::response IROCBridge::getObstaclesCallback([[maybe_unused]] const crow::req
     }
 
     json json_msg = {{"message", "All robots in the fleet with the same obstacles"}, {"obstacles", obstacles_json_list}};
-    return crow::response(crow::status::ACCEPTED, json_msg.dump());
+    return crow::response(crow::status::ACCEPTED, json_msg);
   }
 }
 
@@ -1456,14 +1389,14 @@ crow::response IROCBridge::getMissionCallback([[maybe_unused]] const crow::reque
     error_response["success"]    = false;
     error_response["robot_data"] = json::list();
     RCLCPP_WARN_STREAM(node_->get_logger(), error_response["message"].dump());
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
+    return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
   }
 
   auto mission_goal = response->mission_goal;
 
   auto json = missionGoalToJson(mission_goal);
 
-  return crow::response(crow::status::OK, json.dump());
+  return crow::response(crow::status::OK, json);
 }
 
 /**
@@ -1511,7 +1444,7 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
       error_response["message"] = call_result.message;
       error_response["success"] = false;
       RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission service call failed: " << call_result.message);
-      return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response.dump());
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
     }
 
     // Build robot_results JSON array
@@ -1534,17 +1467,17 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
         status = crow::status::CONFLICT;
       }
       RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
-      return crow::response(status, response_json.dump());
+      return crow::response(status, response_json);
     }
 
     RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
-    return crow::response(crow::status::OK, response_json.dump());
+    return crow::response(crow::status::OK, response_json);
   }
   catch (const std::exception &e) {
     RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to parse JSON: " << e.what());
     json error_response;
     error_response["message"] = std::string("Failed to parse JSON: ") + e.what();
-    return crow::response(crow::status::BAD_REQUEST, error_response.dump());
+    return crow::response(crow::status::BAD_REQUEST, error_response);
   }
 }
 
@@ -1608,7 +1541,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
         response_json["message"]       = resp_msg->message;
         response_json["robot_results"] = buildResultsJson(resp_msg->robot_results);
         const auto status_code = resp_msg->success ? crow::status::ACCEPTED : crow::status::INTERNAL_SERVER_ERROR;
-        return crow::response(status_code, response_json.dump());
+        return crow::response(status_code, response_json);
       }
     }
 
@@ -1618,7 +1551,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       json resp;
       resp["success"] = false;
       resp["message"] = "Action server not available. Check iroc_fleet_manager node.";
-      return crow::response(crow::status::CONFLICT, resp.dump());
+      return crow::response(crow::status::CONFLICT, resp);
     }
 
     auto goal    = iroc_fleet_manager::action::ExecuteMission::Goal();
@@ -1650,7 +1583,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       json resp;
       resp["success"] = false;
       resp["message"] = "Timed out waiting for fleet manager to accept mission start.";
-      return crow::response(crow::status::INTERNAL_SERVER_ERROR, resp.dump());
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, resp);
     }
 
     const auto accepted_handle = goal_response_future.get();
@@ -1659,7 +1592,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       json resp;
       resp["success"] = false;
       resp["message"] = "Mission start rejected by fleet manager. Ensure no mission is currently running and a mission is uploaded first.";
-      return crow::response(crow::status::CONFLICT, resp.dump());
+      return crow::response(crow::status::CONFLICT, resp);
     }
 
     current_goal_handle_ = accepted_handle;
@@ -1667,7 +1600,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
     json resp;
     resp["success"] = true;
     resp["message"] = "Mission started.";
-    return crow::response(crow::status::ACCEPTED, resp.dump());
+    return crow::response(crow::status::ACCEPTED, resp);
   }
 
   // pause / stop: forward to fleet manager service and return structured response
@@ -1682,7 +1615,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   response_json["message"]       = resp_msg->message;
   response_json["robot_results"] = buildResultsJson(resp_msg->robot_results);
   const auto status_code = resp_msg->success ? crow::status::ACCEPTED : crow::status::INTERNAL_SERVER_ERROR;
-  return crow::response(status_code, response_json.dump());
+  return crow::response(status_code, response_json);
 }
 
 /**
@@ -1720,11 +1653,11 @@ crow::response IROCBridge::changeRobotMissionStateCallback([[maybe_unused]] cons
   if (!resp.success) {
     json_msg["message"] = "Call was not successful: " + resp.message;
     RCLCPP_WARN_STREAM(node_->get_logger(), json_msg["message"].dump());
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg.dump());
+    return crow::response(crow::status::INTERNAL_SERVER_ERROR, json_msg);
   }
 
   json_msg["message"] = "Call successful";
-  return crow::response(crow::status::ACCEPTED, json_msg.dump());
+  return crow::response(crow::status::ACCEPTED, json_msg);
 }
 
 /*!
@@ -1773,7 +1706,7 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
                              {"type", robot_handlers_.handlers[i].sh_general_robot_info.getMsg()->robot_type}};
   }
 
-  return crow::response(crow::status::ACCEPTED, robots.dump());
+  return crow::response(crow::status::ACCEPTED, robots);
 }
 
 /**
