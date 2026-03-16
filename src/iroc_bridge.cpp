@@ -189,7 +189,7 @@ private:
 
   // | ------------------ Additional functions ------------------ |
 
-  void parseGeneralRobotInfo(mrs_msgs::msg::GeneralRobotInfo::ConstSharedPtr general_robot_info, const std::string &robot_name);
+  void parseGeneralRobotInfo(mrs_msgs::msg::GeneralRobotInfo::ConstSharedPtr general_robot_info);
   void parseStateEstimationInfo(mrs_msgs::msg::StateEstimationInfo::ConstSharedPtr state_estimation_info, const std::string &robot_name);
   void parseControlInfo(mrs_msgs::msg::ControlInfo::ConstSharedPtr control_info, const std::string &robot_name);
   void parseCollisionAvoidanceInfo(mrs_msgs::msg::CollisionAvoidanceInfo::ConstSharedPtr collision_avoidance_info, const std::string &robot_name);
@@ -386,7 +386,7 @@ void IROCBridge::initialize() {
         std::scoped_lock lock(mtx_feedback_connections_);
         active_feedback_connection_ = &conn;
       })
-      .onclose([&](crow::websocket::connection& conn, const std::string& reason, int code) {
+      .onclose([&](crow::websocket::connection& conn, const std::string& reason, [[maybe_unused]] int code) {
         RCLCPP_INFO_STREAM(node_->get_logger(),
                            "Feedback websocket connection " << conn.get_remote_ip() << " closed: " << reason);
         RCLCPP_INFO_STREAM(node_->get_logger(), "Feedback websocket connection " << &conn << " closed: " << reason);
@@ -519,7 +519,7 @@ void IROCBridge::initialize() {
   RCLCPP_INFO(node_->get_logger(), R"(
    ___ ____   ___   ____ ____       _     _
   |_ _|  _ \ / _ \ / ___| __ ) _ __(_) __| | __ _  ___
-   | || |_) | | | | |   |  _ \| '__| |/ _` |/ _` |/ _ \ 
+   | || |_) | | | | |   |  _ \| '__| |/ _` |/ _` |/ _ \
    | ||  _ <| |_| | |___| |_) | |  | | (_| | (_| |  __/
   |___|_| \_\\___/ \____|____/|_|  |_|\__,_|\__, |\___|
                                             |___/
@@ -538,7 +538,7 @@ void IROCBridge::timerMain() {
     const auto &robot_name = rh.robot_name;
 
     if (rh.sh_general_robot_info.newMsg()) {
-      parseGeneralRobotInfo(rh.sh_general_robot_info.getMsg(), robot_name);
+      parseGeneralRobotInfo(rh.sh_general_robot_info.getMsg());
     }
 
     if (rh.sh_state_estimation_info.newMsg()) {
@@ -650,7 +650,7 @@ void IROCBridge::missionFeedbackCallback(const Mission::Feedback::ConstSharedPtr
 // |                 parsing and output methods                 |
 // --------------------------------------------------------------
 
-void IROCBridge::parseGeneralRobotInfo(mrs_msgs::msg::GeneralRobotInfo::ConstSharedPtr general_robot_info, const std::string &robot_name) {
+void IROCBridge::parseGeneralRobotInfo(mrs_msgs::msg::GeneralRobotInfo::ConstSharedPtr general_robot_info) {
 
   json json_msg = {
       {"robot_name", general_robot_info->robot_name},
@@ -990,7 +990,7 @@ json missionGoalToJson(const iroc_fleet_manager::msg::MissionGoal &mission_goal)
 
     // Extract the points
     json points_list = json::list();
-    for (int j = 0; j < points.size(); j++) {
+    for (size_t j = 0; j < points.size(); j++) {
       mrs_msgs::msg::Reference reference = points.at(j).reference;
       json point     = {{"x", reference.position.x}, {"y", reference.position.y}, {"z", reference.position.z}, {"heading", reference.heading}};
       points_list[j] = std::move(point);
@@ -1475,10 +1475,7 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
         RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission service call failed: " << call_result.message);
         return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
       }
-      RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
-      return crow::response(status, response_json);
     }
-
 
     RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
     return crow::response(crow::status::OK, response_json);
@@ -1745,7 +1742,7 @@ crow::response IROCBridge::availableRobotsCallback([[maybe_unused]] const crow::
  * - For unknown commands: `{"ok": false, "message": "Unknown command"}`
  * - For movement command failures: `{"ok": false, "message": "Failed to send movement command: [error details]"}`
  */
-void IROCBridge::remoteControlCallback(crow::websocket::connection &conn, const std::string &data, bool is_binary) {
+void IROCBridge::remoteControlCallback(crow::websocket::connection &conn, const std::string &data, [[maybe_unused]] bool is_binary) {
   // Convert and check if the received data is a valid JSON
   crow::json::rvalue json_data = crow::json::load(data);
   if (!json_data || !json_data.has("command") || !json_data.has("data")) {
