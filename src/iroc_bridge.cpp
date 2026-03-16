@@ -481,7 +481,7 @@ void IROCBridge::initialize() {
     }
   }
 
-  shopts.no_message_timeout      = mrs_lib::no_timeout;
+  shopts.no_message_timeout = mrs_lib::no_timeout;
   sc_change_fleet_mission_state_ =
       mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::ChangeFleetMissionStateSrv>(node_, "~/change_fleet_mission_state_svc_in", cbkgrp_sc_);
   sc_change_robot_mission_state_ =
@@ -845,14 +845,12 @@ void IROCBridge::sendFeedbackJsonMessage(json& json_msg) {
 }
 
 template <typename ServiceType>
-IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc,
-                                             const std::shared_ptr<typename ServiceType::Request> &request) {
+IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request) {
   return iroc_common::callService(sc, request, node_->get_logger(), clock_);
 }
 
 template <typename ServiceType>
-IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc,
-                                             const std::shared_ptr<typename ServiceType::Request> &request,
+IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
                                              const std::shared_ptr<typename ServiceType::Response> &response) {
   return iroc_common::callService(sc, request, response, node_->get_logger(), clock_);
 }
@@ -1460,15 +1458,27 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
     response_json["message"]       = resp_msg->message;
     response_json["robot_results"] = std::move(robot_results);
 
-    if (!resp_msg->success) {
-      const auto &msg     = resp_msg->message;
-      crow::status status = crow::status::BAD_REQUEST;
-      if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
-        status = crow::status::CONFLICT;
+
+    if (!call_result.success) {
+      if (!resp_msg->success) {
+        const auto &msg     = resp_msg->message;
+        crow::status status = crow::status::BAD_REQUEST;
+        if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
+          status = crow::status::CONFLICT;
+        }
+        RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
+        return crow::response(status, response_json);
+      } else {
+        json error_response;
+        error_response["message"] = call_result.message;
+        error_response["success"] = false;
+        RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission service call failed: " << call_result.message);
+        return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
       }
       RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
       return crow::response(status, response_json);
     }
+
 
     RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
     return crow::response(crow::status::OK, response_json);
@@ -1498,7 +1508,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   static const std::unordered_map<std::string, uint8_t> kTypeMap = {
       {"start", FleetReq::TYPE_START},
       {"pause", FleetReq::TYPE_PAUSE},
-      {"stop",  FleetReq::TYPE_STOP},
+      {"stop", FleetReq::TYPE_STOP},
   };
 
   const auto it = kTypeMap.find(type);
@@ -1511,9 +1521,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   auto buildResultsJson = [](const std::vector<iroc_mission_handler::msg::MissionResult> &results) {
     json arr = json::list();
     for (size_t i = 0; i < results.size(); i++) {
-      arr[i] = {{"robot_name", results[i].name},
-                {"success",    static_cast<bool>(results[i].success)},
-                {"message",    results[i].message}};
+      arr[i] = {{"robot_name", results[i].name}, {"success", static_cast<bool>(results[i].success)}, {"message", results[i].message}};
     }
     return arr;
   };
@@ -1530,9 +1538,9 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
       const bool is_alive = (status == rclcpp_action::GoalStatus::STATUS_ACCEPTED || status == rclcpp_action::GoalStatus::STATUS_EXECUTING);
       if (is_alive) {
         RCLCPP_INFO_STREAM(node_->get_logger(), "Mission already active — resuming via service.");
-        auto req_msg  = std::make_shared<FleetReq>();
-        auto resp_msg = std::make_shared<FleetSrv::Response>();
-        req_msg->type = FleetReq::TYPE_START;
+        auto req_msg           = std::make_shared<FleetReq>();
+        auto resp_msg          = std::make_shared<FleetSrv::Response>();
+        req_msg->type          = FleetReq::TYPE_START;
         const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg);
         if (!call_result.success)
           return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + call_result.message + "\"}");
@@ -1604,9 +1612,9 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   }
 
   // pause / stop: forward to fleet manager service and return structured response
-  auto req_msg  = std::make_shared<FleetReq>();
-  auto resp_msg = std::make_shared<FleetSrv::Response>();
-  req_msg->type = op_type;
+  auto req_msg           = std::make_shared<FleetReq>();
+  auto resp_msg          = std::make_shared<FleetSrv::Response>();
+  req_msg->type          = op_type;
   const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg);
   if (!call_result.success)
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + call_result.message + "\"}");
@@ -1631,7 +1639,7 @@ crow::response IROCBridge::changeRobotMissionStateCallback([[maybe_unused]] cons
   static const std::unordered_map<std::string, uint8_t> kTypeMap = {
       {"start", RobotReq::TYPE_START},
       {"pause", RobotReq::TYPE_PAUSE},
-      {"stop",  RobotReq::TYPE_STOP},
+      {"stop", RobotReq::TYPE_STOP},
   };
 
   const auto it = kTypeMap.find(type);
