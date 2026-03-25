@@ -4,9 +4,11 @@
  * \file iroc_bridge.hpp
  * \brief Bidirectional translator between the web frontend (HTTP/WebSocket) and ROS 2.
  *
- * IROCBridge is a ROS 2 composable component that exposes a Crow HTTP server (port 8080)
+ * IROCBridge is a ROS 2 composable component that exposes a Crow HTTP server
+ * (default port 8080, configurable via the 'iroc_bridge/server_port' ROS parameter) 
  * and WebSocket endpoints for real-time telemetry, mission feedback, and remote control.
- * It also acts as an HTTP client to push notifications to the backend (port 8000).
+ * It also acts as an HTTP client to push notifications to the backend 
+ * (default port 8000, configurable via 'iroc_bridge/client_port').
  *
  * Key data flows:
  * - **Telemetry (ROS -> Web):** A main timer polls per-robot subscriber handlers and
@@ -79,6 +81,8 @@
 #include <optional>
 #include <thread>
 #include <vector>
+#include <string>
+#include <memory>
 
 namespace iroc_bridge
 {
