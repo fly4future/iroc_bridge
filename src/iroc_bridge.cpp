@@ -66,8 +66,6 @@ void IROCBridge::initialize() {
   filtered_robot_names.erase(it, filtered_robot_names.end());
 
   // Arguments set config file
-  const auto client_url  = param_loader.loadParam2<std::string>("iroc_bridge/client_url");
-  const auto client_port = param_loader.loadParam2<int>("iroc_bridge/client_port");
   const auto server_port = param_loader.loadParam2<int>("iroc_bridge/server_port");
 
   const auto main_timer_rate       = param_loader.loadParam2<double>("iroc_bridge/main_timer_rate");
@@ -84,9 +82,6 @@ void IROCBridge::initialize() {
   }
 
   // | ----------------- HTTP REST API callbacks ---------------- |
-  // HTTP Client
-  http_client_ = std::make_unique<httplib::Client>(client_url, client_port);
-
   // HTTP Server
   CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setSafetyBorderCallback(req); });
@@ -351,34 +346,43 @@ void IROCBridge::missionDoneCallback(const rclcpp_action::ClientGoalHandle<Missi
 
   auto result = wrapped_result.result;
 
-  // TODO fill properly
+  std::string mission_state;
+  double      progress = 0.0;
   switch (wrapped_result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
       RCLCPP_INFO_STREAM(node_->get_logger(), "Fleet manager mission action server finished successfully");
+      mission_state = "mission_completed";
+      progress      = 100.0;
       break;
     case rclcpp_action::ResultCode::ABORTED:
       RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet manager mission action server was aborted");
+      mission_state = "mission_aborted";
       break;
     case rclcpp_action::ResultCode::CANCELED:
       RCLCPP_WARN_STREAM(node_->get_logger(), "Fleet manager mission action server was canceled");
+      mission_state = "mission_aborted";
       break;
     default:
       RCLCPP_ERROR_STREAM(node_->get_logger(), "Unknown result code from Mission Action server");
+      mission_state = "mission_error";
       break;
   }
 
-  json robot_results = json::list();
+  json robots = json::list();
 
   for (size_t i = 0; i < result->robot_results.size(); i++) {
-    robot_results[i] = {{"robot_name", result->robot_results[i].name},
-                        {"success", static_cast<bool>(result->robot_results[i].success)},
-                        {"message", result->robot_results[i].message}};
+    robots[i] = {{"robot_name", result->robot_results[i].name},
+                 {"success", static_cast<bool>(result->robot_results[i].success)},
+                 {"message", result->robot_results[i].message}};
   }
 
-  // Create the main JSON object
-  json json_msg = {{"success", static_cast<bool>(result->success)}, {"message", result->message}, {"robot_results", robot_results}};
+  json json_msg = {{"progress", progress},
+                   {"mission_state", mission_state},
+                   {"message", result->message},
+                   {"success", static_cast<bool>(result->success)},
+                   {"robots", robots}};
 
-  sendJsonMessage("results", json_msg);
+  sendFeedbackJsonMessage(json_msg);
 }
 
 void IROCBridge::missionFeedbackCallback(const Mission::Feedback::ConstSharedPtr feedback) {
@@ -574,20 +578,6 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
 // |                       helper methods                       |
 // --------------------------------------------------------------
 
-void IROCBridge::sendJsonMessage(const std::string &msg_type, json &json_msg) {
-  const std::string url          = "/api/mission/" + msg_type;
-  const std::string body         = json_msg.dump();
-  const std::string content_type = "application/json";
-  const auto        res          = http_client_->Post(url, body, content_type);
-
-  if (res)
-    RCLCPP_DEBUG_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, res->status << ": " << res->body);
-  else
-    RCLCPP_DEBUG_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Sent JSON message to " << url << ": " << body);
-
-  return;
-}
-
 void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_msg) {
   json_msg["type"]    = type;
   std::string message = json_msg.dump();
@@ -634,9 +624,6 @@ void IROCBridge::routine_death_check() {
     clock_->sleep_for(std::chrono::milliseconds(500));
   RCLCPP_INFO(node_->get_logger(), "Stopping the HTTP server.");
   http_srv_.stop();
-
-  RCLCPP_INFO(node_->get_logger(), "Stopping the HTTP client.");
-  http_client_->stop();
 }
 
 IROCBridge::robot_handler_t *IROCBridge::findRobotHandler(const std::string &robot_name, robot_handlers_t &robot_handlers) {
