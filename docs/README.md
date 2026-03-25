@@ -448,7 +448,7 @@ The missions are handled by `IROC Fleet Manager`: a node responsible for distrib
 Mission management is split into two explicit phases:
 
 1. **Upload** (`POST /mission`) — synchronous. The fleet manager runs trajectory generation and safety validation on every robot before returning. Errors (bad coordinates, safety violations, unavailable robots) are returned immediately with per-robot detail. If any robot fails, all staged missions are rolled back.
-2. **Execute** (`POST /mission/start`) — asynchronous. Triggers execution on all robots and returns immediately. Real-time feedback flows over the WebSocket `/telemetry` connection. Results are delivered via WebSocket when the mission finishes.
+2. **Execute** (`POST /mission/start`) — asynchronous. Triggers execution on all robots and returns immediately. Real-time feedback flows over the WebSocket `/mission/feedback` connection. Results are delivered via WebSocket when the mission finishes.
 
 ```
 POST /mission         →  Upload & validate (sync)   →  200 OK  or  400/409 with per-robot errors
@@ -838,7 +838,7 @@ You can also control individual robots using these endpoints:
 
 ### Feedback
 
-During an active mission (after `POST /mission/start`), periodic feedback is broadcast over the WebSocket `/telemetry` connection. Feedback is broadcast in both `EXECUTING` and `PAUSED` states.
+During an active mission (after `POST /mission/start`), periodic feedback is broadcast over the WebSocket `/mission/feedback` connection. Feedback is broadcast in both `EXECUTING` and `PAUSED` states.
 
 - <strong style="color: orange">`onmessage`</strong>
   **Mission Feedback**
@@ -850,29 +850,29 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
   ```json
   {
     "type": "MissionFeedback",
-    "progress": 0.75,
+    "progress": 75.0,
     "mission_state": "mission_executing",
     "message": "Mission in progress",
     "robots": [
       {
         "robot_name": "uav1",
         "message": "Executing trajectory",
-        "mission_progress": 0.6,
+        "mission_progress": 60.0,
         "current_goal": 2,
         "distance_to_goal": 15.3,
         "goal_estimated_arrival_time": 30,
-        "goal_progress": 0.8,
+        "goal_progress": 80.0,
         "distance_to_finish": 50.2,
         "finish_estimated_arrival_time": 50
       },
       {
         "robot_name": "uav2",
         "message": "Executing trajectory",
-        "mission_progress": 0.45,
+        "mission_progress": 45.0,
         "current_goal": 1,
         "distance_to_goal": 5.7,
         "goal_estimated_arrival_time": 30,
-        "goal_progress": 0.95,
+        "goal_progress": 95.0,
         "distance_to_finish": 75.8,
         "finish_estimated_arrival_time": 50
       }
@@ -887,6 +887,7 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
   | `"trajectories_loaded"` | Mission staged, waiting for start command |
   | `"mission_executing"` | Mission actively running |
   | `"mission_paused"` | Mission paused (all robots holding position) |
+  | `"mission_completed"` | All robots finished successfully |
   | `"mission_aborted"` | Mission was stopped or cancelled |
   | `"mission_invalid"` | Mission failed validation |
   | `"mission_error"` | Unexpected error during execution |

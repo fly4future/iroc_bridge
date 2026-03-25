@@ -116,7 +116,7 @@ private:
   rclcpp::CallbackGroup::SharedPtr cbkgrp_sc_;      ///< Callback group for service clients.
   rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_;  ///< Callback group for timers.
 
-  /** \brief Loads config, creates HTTP server/client, sets up subscribers, service clients, WebSocket endpoints, and timers. */
+  /** \brief Loads config, creates HTTP server sets up subscribers, service clients, WebSocket endpoints, and timers. */
   void initialize(void);
   /** \brief Graceful shutdown handler. */
   void shutdown();
