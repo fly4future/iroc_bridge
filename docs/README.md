@@ -897,24 +897,20 @@ During an active mission (after `POST /mission/start`), periodic feedback is bro
 
 ### Result
 
-When a mission finishes (success or failure), the result is delivered via HTTP POST from the bridge to the client server at:
-
-<strong style="color: #49cc90">`POST`</strong>
-**http://\<client_url\>:\<client_port\>/api/mission/results**
-<span style="color: gray">
-The client URL and port are configured in the bridge's config file (`iroc_bridge/client_url`, `iroc_bridge/client_port`).
-</span>
+When a mission finishes (success or failure), the result is delivered via the `/mission/feedback` WebSocket as a JSON message with `mission_state` set to `mission_completed`, `mission_aborted`, or `mission_error`.
 
 <details>
   <summary>
-  <em>Body</em> <span style="color: gray">raw (json)</span>
+  <em>WebSocket message</em> <span style="color: gray">JSON</span>
   </summary>
 
 ```json
 {
-  "success": true,
+  "progress": 100.0,
+  "mission_state": "mission_completed",
   "message": "All robots finished successfully, mission finished",
-  "robot_results": [
+  "success": true,
+  "robots": [
     {
       "robot_name": "uav1",
       "success": true,
