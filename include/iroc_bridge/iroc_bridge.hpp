@@ -5,10 +5,8 @@
  * \brief Bidirectional translator between the web frontend (HTTP/WebSocket) and ROS 2.
  *
  * IROCBridge is a ROS 2 composable component that exposes a Crow HTTP server
- * (default port 8080, configurable via the 'iroc_bridge/server_port' ROS parameter) 
+ * (default port 8080, configurable via the 'iroc_bridge/server_port' ROS parameter)
  * and WebSocket endpoints for real-time telemetry, mission feedback, and remote control.
- * It also acts as an HTTP client to push notifications to the backend 
- * (default port 8000, configurable via 'iroc_bridge/client_port').
  *
  * Key data flows:
  * - **Telemetry (ROS -> Web):** A main timer polls per-robot subscriber handlers and
@@ -71,7 +69,6 @@
 #include <Eigen/Core>
 
 /* Third party */
-#include <httplib/httplib.h>
 #include "crow.h"
 #include "crow/middlewares/cors.h"
 
@@ -124,12 +121,10 @@ private:
   /** \brief Graceful shutdown handler. */
   void shutdown();
 
-  // | ---------------------- HTTP server & client --------------------- |
+  // | ---------------------- HTTP server --------------------- |
 
   std::thread                  th_http_srv_;  ///< Thread running the Crow HTTP server.
   crow::App<crow::CORSHandler> http_srv_;     ///< Crow HTTP server with CORS middleware (port 8080).
-
-  std::unique_ptr<httplib::Client> http_client_; ///< HTTP client for posting to the backend (port 8000).
 
   using result_t = iroc_common::result_t;
 
@@ -278,9 +273,6 @@ private:
   void parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSharedPtr uav_info, const std::string &robot_name);
 
   // | ----------------------- JSON output methods ----------------------- |
-
-  /** \brief Posts a JSON message to the backend HTTP server at /api/mission/{msg_type}. */
-  void sendJsonMessage(const std::string &msg_type, json &json_msg);
 
   /** \brief Sends a JSON message via the mission feedback WebSocket channel. */
   void sendFeedbackJsonMessage(json &json_msg);
