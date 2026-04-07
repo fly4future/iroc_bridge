@@ -660,9 +660,9 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
   RCLCPP_INFO_STREAM(node_->get_logger(), "Calling command \"" << command_type << "\".");
 
-  auto request        = std::make_shared<std_srvs::srv::Trigger::Request>();
-  json robot_results  = json::list();
-  size_t result_index = 0;
+  auto   request       = std::make_shared<std_srvs::srv::Trigger::Request>();
+  json   robot_results = json::list();
+  size_t result_index  = 0;
 
   for (const auto &robot_name : robot_names) {
     auto *rh_ptr = findRobotHandler(robot_name, robot_handlers_);
@@ -670,8 +670,8 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     if (rh_ptr == nullptr) {
       RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Robot \"" << robot_name << "\" not found. Skipping.");
       robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", "Robot not found"}};
-      everything_ok = false;
-      status_code   = crow::status::NOT_FOUND;
+      everything_ok                 = false;
+      status_code                   = crow::status::NOT_FOUND;
       continue;
     }
 
@@ -681,8 +681,8 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
     if (!resp.success) {
       robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", resp.message}};
-      everything_ok = false;
-      status_code   = crow::status::BAD_REQUEST;
+      everything_ok                 = false;
+      status_code                   = crow::status::BAD_REQUEST;
     } else {
       robot_results[result_index++] = {{"robot", robot_name}, {"success", true}, {"message", resp.message}};
     }
@@ -716,8 +716,8 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     if (rh_ptr == nullptr) {
       RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Robot \"" << robot_name << "\" not found. Skipping.");
       robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", "Robot not found"}};
-      everything_ok = false;
-      status_code   = crow::status::NOT_FOUND;
+      everything_ok                 = false;
+      status_code                   = crow::status::NOT_FOUND;
       continue;
     }
 
@@ -727,8 +727,8 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
     if (!resp.success) {
       robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", resp.message}};
-      everything_ok = false;
-      status_code   = crow::status::BAD_REQUEST;
+      everything_ok                 = false;
+      status_code                   = crow::status::BAD_REQUEST;
     } else {
       robot_results[result_index++] = {{"robot", robot_name}, {"success", true}, {"message", resp.message}};
     }
