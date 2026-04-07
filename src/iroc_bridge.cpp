@@ -568,6 +568,10 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
                    {"gnss_uncertainty", system_health_info->gnss_uncertainty},
                    {"mag_strength", system_health_info->mag_strength},
                    {"mag_uncertainty", system_health_info->mag_uncertainty},
+                   {"rc_rssi", system_health_info->rc_rssi},
+                   {"wifi_interface", system_health_info->wifi_interface},
+                   {"wifi_link_quality", system_health_info->wifi_link_quality},
+                   {"wifi_signal_dbm", system_health_info->wifi_signal_dbm},
                    {"node_cpu_loads", node_cpu_loads},
                    {"available_sensors", available_sensors}};
 
