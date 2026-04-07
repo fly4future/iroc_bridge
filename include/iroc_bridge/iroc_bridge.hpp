@@ -132,13 +132,13 @@ private:
    * \brief Return type for HTTP command actions.
    *
    * - `success`: Whether the underlying ROS service call(s) succeeded.
-   * - `message`: Human-readable status or error description.
+   * - `body`: Structured JSON response with per-robot results.
    * - `status_code`: HTTP status code to return to the client.
    */
   struct action_result_t
   {
     bool         success;
-    std::string  message;
+    json         body;
     crow::status status_code;
   };
 

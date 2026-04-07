@@ -643,31 +643,33 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
   std::scoped_lock lck(robot_handlers_.mtx);
 
-  bool              everything_ok = true;
-  std::stringstream ss;
-  crow::status      status_code = crow::status::ACCEPTED;
-  ss << "Command: " << command_type << " Result: ";
+  bool         everything_ok = true;
+  crow::status status_code   = crow::status::ACCEPTED;
 
   // Look up handler pointer-to-member
   auto it = trigger_command_handlers_.find(command_type);
   if (it == trigger_command_handlers_.end()) {
-    ss << "Command type \"" << command_type << "\" not found\n";
     RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Command type \"" << command_type << "\" not found.");
-    return {false, ss.str(), crow::status::NOT_FOUND};
+    json error_body;
+    error_body["success"] = false;
+    error_body["message"] = "Command type \"" + command_type + "\" not found";
+    return {false, std::move(error_body), crow::status::NOT_FOUND};
   }
 
   auto handler_ptr = it->second;
 
   RCLCPP_INFO_STREAM(node_->get_logger(), "Calling command \"" << command_type << "\".");
 
-  auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+  auto request        = std::make_shared<std_srvs::srv::Trigger::Request>();
+  json robot_results  = json::list();
+  size_t result_index = 0;
 
   for (const auto &robot_name : robot_names) {
     auto *rh_ptr = findRobotHandler(robot_name, robot_handlers_);
 
     if (rh_ptr == nullptr) {
-      ss << "Robot \"" << robot_name << "\" not found, skipping\n";
       RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Robot \"" << robot_name << "\" not found. Skipping.");
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", "Robot not found"}};
       everything_ok = false;
       status_code   = crow::status::NOT_FOUND;
       continue;
@@ -678,14 +680,19 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     const auto resp   = callService<std_srvs::srv::Trigger>(client, request);
 
     if (!resp.success) {
-      ss << "Call for robot \"" << robot_name << "\" failed: " << resp.message << "\n";
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", resp.message}};
       everything_ok = false;
       status_code   = crow::status::BAD_REQUEST;
+    } else {
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", true}, {"message", resp.message}};
     }
   }
 
-  ss << "Successfully processed\n";
-  return {everything_ok, ss.str(), status_code};
+  json body;
+  body["success"]       = everything_ok;
+  body["message"]       = everything_ok ? "Successfully processed" : "Partial or total failure";
+  body["robot_results"] = std::move(robot_results);
+  return {everything_ok, std::move(body), status_code};
 }
 
 template <typename ServiceType>
@@ -695,18 +702,20 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
 
   std::scoped_lock lck(robot_handlers_.mtx);
 
-  bool              everything_ok = true;
-  std::stringstream ss;
-  crow::status      status_code = crow::status::ACCEPTED;
+  bool         everything_ok = true;
+  crow::status status_code   = crow::status::ACCEPTED;
 
   RCLCPP_INFO_STREAM(node_->get_logger(), "Calling service action.");
+
+  json   robot_results = json::list();
+  size_t result_index  = 0;
 
   for (const auto &robot_name : robot_names) {
     auto *rh_ptr = findRobotHandler(robot_name, robot_handlers_);
 
     if (rh_ptr == nullptr) {
-      ss << "Robot \"" << robot_name << "\" not found, skipping\n";
       RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Robot \"" << robot_name << "\" not found. Skipping.");
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", "Robot not found"}};
       everything_ok = false;
       status_code   = crow::status::NOT_FOUND;
       continue;
@@ -717,14 +726,19 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     const auto resp   = callService<ServiceType>(client, request);
 
     if (!resp.success) {
-      ss << "Call for robot \"" << robot_name << "\" was not successful: " << resp.message << "\n";
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", false}, {"message", resp.message}};
       everything_ok = false;
       status_code   = crow::status::BAD_REQUEST;
+    } else {
+      robot_results[result_index++] = {{"robot", robot_name}, {"success", true}, {"message", resp.message}};
     }
   }
 
-  ss << "Successfully processed\n";
-  return {everything_ok, ss.str(), status_code};
+  json body;
+  body["success"]       = everything_ok;
+  body["message"]       = everything_ok ? "Successfully processed" : "Partial or total failure";
+  body["robot_results"] = std::move(robot_results);
+  return {everything_ok, std::move(body), status_code};
 }
 
 template <typename Result>
@@ -811,7 +825,7 @@ crow::response IROCBridge::setOriginCallback(const crow::request &request) {
     robot_names.push_back(rh.robot_name);
 
   // check that all robot names are valid and find the corresponding robot handlers
-  const auto result = commandAction<mrs_msgs::srv::ReferenceStampedSrv>(robot_names, &robot_handler_t::sc_set_origin, service_request);
+  auto result = commandAction<mrs_msgs::srv::ReferenceStampedSrv>(robot_names, &robot_handler_t::sc_set_origin, service_request);
 
   if (result.success) {
     RCLCPP_INFO_STREAM(node_->get_logger(), "Set origin for " << robot_names.size() << " robots.");
@@ -819,7 +833,7 @@ crow::response IROCBridge::setOriginCallback(const crow::request &request) {
     world_origin_.y = json_msg["y"].d();
   }
 
-  return crow::response(result.status_code, result.message);
+  return crow::response(result.status_code, result.body);
 }
 
 /**
@@ -919,9 +933,9 @@ crow::response IROCBridge::setSafetyBorderCallback(const crow::request &request)
   service_request->prism                                                      = safety_border.prism;
   service_request->keep_obstacles                                             = false;
 
-  const auto result = commandAction<mrs_msgs::srv::SetSafetyBorderSrv>(robot_names, &robot_handler_t::sc_set_safety_area, service_request);
+  auto result = commandAction<mrs_msgs::srv::SetSafetyBorderSrv>(robot_names, &robot_handler_t::sc_set_safety_area, service_request);
 
-  return crow::response(result.status_code, result.message);
+  return crow::response(result.status_code, result.body);
 }
 
 /**
@@ -1073,12 +1087,12 @@ crow::response IROCBridge::setObstacleCallback(const crow::request &request) {
     service_request->prism.vertical_frame                                   = vertical_frame;
 
     // Call service for this obstacle
-    const auto result = commandAction<mrs_msgs::srv::SetObstacleSrv>(robot_names, &robot_handler_t::sc_set_obstacle, service_request);
+    auto result = commandAction<mrs_msgs::srv::SetObstacleSrv>(robot_names, &robot_handler_t::sc_set_obstacle, service_request);
 
     // Check if the service call failed
     if (!result.success) {
-      RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to set obstacle " << i << ": " << result.message);
-      return crow::response(result.status_code, "Failed to set obstacle " + std::to_string(i) + ": " + result.message);
+      RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to set obstacle " << i << ": " << result.body["message"].dump());
+      return crow::response(result.status_code, result.body);
     }
   }
 
@@ -1448,8 +1462,8 @@ crow::response IROCBridge::commandCallback([[maybe_unused]] const crow::request 
     }
   }
 
-  const auto result = commandAction(robot_names, command_type);
-  return crow::response(result.status_code, result.message);
+  auto result = commandAction(robot_names, command_type);
+  return crow::response(result.status_code, result.body);
 }
 
 /**
