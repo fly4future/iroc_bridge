@@ -371,7 +371,7 @@ void IROCBridge::missionDoneCallback(const rclcpp_action::ClientGoalHandle<Missi
   json robots = json::list();
 
   for (size_t i = 0; i < result->robot_results.size(); i++) {
-    robots[i] = {{"robot_name", result->robot_results[i].name},
+    robots[i] = {{"robot", result->robot_results[i].name},
                  {"success", static_cast<bool>(result->robot_results[i].success)},
                  {"message", result->robot_results[i].message}};
   }
@@ -396,7 +396,7 @@ void IROCBridge::missionFeedbackCallback(const Mission::Feedback::ConstSharedPtr
   for (size_t i = 0; i < robot_feedbacks.size(); i++) {
     const auto &rfb = robot_feedbacks[i];
 
-    json robot_json = {{"robot_name", rfb.name},
+    json robot_json = {{"robot", rfb.name},
                        {"message", rfb.message},
                        {"mission_progress", rfb.mission_progress},
                        {"current_goal", rfb.goal_idx},
@@ -653,6 +653,7 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
     json error_body;
     error_body["success"] = false;
     error_body["message"] = "Command type \"" + command_type + "\" not found";
+    error_body["robot_results"] = json::list();
     return {false, std::move(error_body), crow::status::NOT_FOUND};
   }
 
@@ -1226,7 +1227,7 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
     // Build robot_results JSON array
     json robot_results = json::list();
     for (size_t i = 0; i < resp_msg->robot_results.size(); i++) {
-      robot_results[i] = {{"robot_name", resp_msg->robot_results[i].name},
+      robot_results[i] = {{"robot", resp_msg->robot_results[i].name},
                           {"success", static_cast<bool>(resp_msg->robot_results[i].success)},
                           {"message", resp_msg->robot_results[i].message}};
     }
@@ -1296,7 +1297,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   auto buildResultsJson = [](const std::vector<iroc_mission_handler::msg::MissionResult> &results) {
     json arr = json::list();
     for (size_t i = 0; i < results.size(); i++) {
-      arr[i] = {{"robot_name", results[i].name}, {"success", static_cast<bool>(results[i].success)}, {"message", results[i].message}};
+      arr[i] = {{"robot", results[i].name}, {"success", static_cast<bool>(results[i].success)}, {"message", results[i].message}};
     }
     return arr;
   };
