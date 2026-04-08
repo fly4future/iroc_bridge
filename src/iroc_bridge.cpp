@@ -492,8 +492,12 @@ void IROCBridge::parseControlInfo(mrs_msgs::msg::ControlInfo::ConstSharedPtr con
   json json_msg = {{"robot_name", robot_name},
                    {"active_controller", control_info->active_controller},
                    {"available_controllers", json::list(control_info->available_controllers.begin(), control_info->available_controllers.end())},
+                   {"active_gains", control_info->active_gains},
+                   {"available_gains", json::list(control_info->available_gains.begin(), control_info->available_gains.end())},
                    {"active_tracker", control_info->active_tracker},
                    {"available_trackers", json::list(control_info->available_trackers.begin(), control_info->available_trackers.end())},
+                   {"active_constraints", control_info->active_constraints},
+                   {"available_constraints", json::list(control_info->available_constraints.begin(), control_info->available_constraints.end())},
                    {"thrust", control_info->thrust}};
 
   sendTelemetryJsonMessage("ControlInfo", json_msg);
@@ -566,6 +570,8 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
                    {"control_manager_rate", system_health_info->control_manager_rate},
                    {"state_estimation_rate", system_health_info->state_estimation_rate},
                    {"gnss_uncertainty", system_health_info->gnss_uncertainty},
+                   {"gnss_fix_type", system_health_info->gnss_fix_type},
+                   {"gnss_num_satellites", system_health_info->gnss_num_satellites},
                    {"mag_strength", system_health_info->mag_strength},
                    {"mag_uncertainty", system_health_info->mag_uncertainty},
                    {"rc_rssi", system_health_info->rc_rssi},
@@ -651,8 +657,8 @@ IROCBridge::action_result_t IROCBridge::commandAction(const std::vector<std::str
   if (it == trigger_command_handlers_.end()) {
     RCLCPP_WARN_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "Command type \"" << command_type << "\" not found.");
     json error_body;
-    error_body["success"] = false;
-    error_body["message"] = "Command type \"" + command_type + "\" not found";
+    error_body["success"]       = false;
+    error_body["message"]       = "Command type \"" + command_type + "\" not found";
     error_body["robot_results"] = json::list();
     return {false, std::move(error_body), crow::status::NOT_FOUND};
   }
