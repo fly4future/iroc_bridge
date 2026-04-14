@@ -555,9 +555,13 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
   for (size_t i = 0; i < system_health_info->available_sensors.size(); i++) {
     const auto &available_sensor = system_health_info->available_sensors[i];
 
+    json sensor_details = sensorDetailsToJson(available_sensor.details);
     // Create an object for each required_sensor using initializer list
-    available_sensors[i] = {
-        {"name", available_sensor.name}, {"status", available_sensor.status}, {"ready", available_sensor.ready}, {"rate", available_sensor.rate}};
+    available_sensors[i] = {{"name", available_sensor.name},
+                            {"status", available_sensor.message},
+                            {"ready", available_sensor.ready},
+                            {"rate", available_sensor.rate},
+                            {"details", sensor_details}};
   }
 
   // Create the main JSON object using initializer list
@@ -569,9 +573,10 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
                    {"hw_api_rate", system_health_info->hw_api_rate},
                    {"control_manager_rate", system_health_info->control_manager_rate},
                    {"state_estimation_rate", system_health_info->state_estimation_rate},
-                   {"gnss_uncertainty", system_health_info->gnss_uncertainty},
-                   {"gnss_fix_type", system_health_info->gnss_fix_type},
-                   {"gnss_num_satellites", system_health_info->gnss_num_satellites},
+                   // TODO parse the sensor key-value array and add it to the json
+                   // {"gnss_uncertainty", system_health_info->gnss_uncertainty},
+                   // {"gnss_fix_type", system_health_info->gnss_fix_type},
+                   // {"gnss_num_satellites", system_health_info->gnss_num_satellites},
                    {"mag_strength", system_health_info->mag_strength},
                    {"mag_uncertainty", system_health_info->mag_uncertainty},
                    {"rc_rssi", system_health_info->rc_rssi},
@@ -587,6 +592,43 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
 // --------------------------------------------------------------
 // |                       helper methods                       |
 // --------------------------------------------------------------
+crow::json::wvalue IROCBridge::sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details) {
+  crow::json::wvalue json;
+  // Try to recover the original type from the string value
+  // numeric case
+  for (const auto &detail : details) {
+    try {
+      size_t pos;
+      double val = std::stod(detail.value, &pos);
+      if (pos == detail.value.size()) {
+        json[detail.key] = val;
+        continue;
+      }
+    }
+    catch (...) {
+    }
+
+    // boolean case
+    if (detail.value == "true") {
+      json[detail.key] = true;
+      continue;
+    }
+    if (detail.value == "false") {
+      json[detail.key] = false;
+      continue;
+    }
+
+    // nan case
+    if (detail.value == "nan") {
+      json[detail.key] = nullptr;
+      continue;
+    }
+
+    // fallback: string
+    json[detail.key] = detail.value;
+  }
+  return json;
+}
 
 void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_msg) {
   json_msg["type"]    = type;

@@ -365,6 +365,8 @@ private:
   result_t callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
                        const std::shared_ptr<typename ServiceType::Response> &response);
 
+ crow::json::wvalue sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details); 
+
   // | ----------------------- Background threads & WebSocket state ----------------------- |
 
   std::thread th_death_check_;     ///< Monitors rclcpp::ok() and stops HTTP server on ROS shutdown.
