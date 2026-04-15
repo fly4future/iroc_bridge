@@ -573,13 +573,6 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
                    {"hw_api_rate", system_health_info->hw_api_rate},
                    {"control_manager_rate", system_health_info->control_manager_rate},
                    {"state_estimation_rate", system_health_info->state_estimation_rate},
-                   // TODO parse the sensor key-value array and add it to the json
-                   // {"gnss_uncertainty", system_health_info->gnss_uncertainty},
-                   // {"gnss_fix_type", system_health_info->gnss_fix_type},
-                   // {"gnss_num_satellites", system_health_info->gnss_num_satellites},
-                   {"mag_strength", system_health_info->mag_strength},
-                   {"mag_uncertainty", system_health_info->mag_uncertainty},
-                   {"rc_rssi", system_health_info->rc_rssi},
                    {"wifi_interface", system_health_info->wifi_interface},
                    {"wifi_link_quality", system_health_info->wifi_link_quality},
                    {"wifi_signal_dbm", system_health_info->wifi_signal_dbm},
