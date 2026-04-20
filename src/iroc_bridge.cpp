@@ -1,7 +1,7 @@
 #include "iroc_bridge/iroc_bridge.hpp"
 
 /* Implementation-only includes */
-#include <mrs_lib/param_loader.h>
+#include <diagnostic_msgs/msg/key_value.hpp>
 #include <mrs_lib/mutex.h>
 
 #include <sensor_msgs/msg/battery_state.hpp>

@@ -40,6 +40,7 @@ set(DEPENDENCIES
   iroc_fleet_manager
   iroc_common
   sensor_msgs
+  diagnostic_msgs
 )
 
 foreach(DEP IN LISTS DEPENDENCIES)
