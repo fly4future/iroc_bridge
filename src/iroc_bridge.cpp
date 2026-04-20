@@ -1,24 +1,26 @@
 #include "iroc_bridge/iroc_bridge.hpp"
 
-/* Implementation-only includes */
-#include <mrs_lib/param_loader.h>
-#include <mrs_lib/mutex.h>
-
-#include <sensor_msgs/msg/battery_state.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
-#include <std_msgs/msg/float64.hpp>
-#include <std_srvs/srv/set_bool.hpp>
-
-#include <mrs_robot_diagnostics/enums/robot_type.h>
-
-#include <iroc_common/call_service.h>
-
+// Standard includes
 #include <unistd.h>
 #include <iostream>
 #include <future>
 #include <unordered_map>
 #include <string>
 #include <algorithm>
+
+/* Implementation-only includes */
+#include <diagnostic_msgs/msg/key_value.hpp>
+#include <mrs_lib/mutex.h>
+#include <mrs_lib/param_loader.h>
+#include <sensor_msgs/msg/battery_state.hpp>
+#include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+
+// IROC messages
+#include <mrs_robot_diagnostics/enums/robot_type.h>
+#include <iroc_common/call_service.h>
+
 
 namespace iroc_bridge
 {
@@ -541,8 +543,8 @@ void IROCBridge::parseSensorInfo(mrs_msgs::msg::SensorInfo::ConstSharedPtr senso
 void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSharedPtr system_health_info, const std::string &robot_name) {
   // Create arrays for node_cpu_loads
   json node_cpu_loads = json::list();
-  for (size_t i = 0; i < system_health_info->node_cpu_loads.size(); i++) {
-    const auto &node_cpu_load = system_health_info->node_cpu_loads[i];
+  for (size_t i = 0; i < system_health_info->onboard_computer_info.node_cpu_loads.size(); i++) {
+    const auto &node_cpu_load = system_health_info->onboard_computer_info.node_cpu_loads[i];
 
     // Create a nested array for each node_cpu_load using initializer list
     json node_entry = json::list({node_cpu_load.node_name, node_cpu_load.cpu_load});
@@ -555,29 +557,27 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
   for (size_t i = 0; i < system_health_info->available_sensors.size(); i++) {
     const auto &available_sensor = system_health_info->available_sensors[i];
 
+    json sensor_details = sensorDetailsToJson(available_sensor.details);
     // Create an object for each required_sensor using initializer list
-    available_sensors[i] = {
-        {"name", available_sensor.name}, {"status", available_sensor.status}, {"ready", available_sensor.ready}, {"rate", available_sensor.rate}};
+    available_sensors[i] = {{"name", available_sensor.name},
+                            {"status", available_sensor.message},
+                            {"ready", available_sensor.ready},
+                            {"rate", available_sensor.rate},
+                            {"details", sensor_details}};
   }
 
   // Create the main JSON object using initializer list
   json json_msg = {{"robot_name", robot_name},
-                   {"cpu_load", system_health_info->cpu_load},
-                   {"free_ram", system_health_info->free_ram},
-                   {"total_ram", system_health_info->total_ram},
-                   {"free_hdd", system_health_info->free_hdd},
+                   {"cpu_load", system_health_info->onboard_computer_info.cpu_load},
+                   {"free_ram", system_health_info->onboard_computer_info.free_ram},
+                   {"total_ram", system_health_info->onboard_computer_info.total_ram},
+                   {"free_hdd", system_health_info->onboard_computer_info.free_hdd},
                    {"hw_api_rate", system_health_info->hw_api_rate},
                    {"control_manager_rate", system_health_info->control_manager_rate},
                    {"state_estimation_rate", system_health_info->state_estimation_rate},
-                   {"gnss_uncertainty", system_health_info->gnss_uncertainty},
-                   {"gnss_fix_type", system_health_info->gnss_fix_type},
-                   {"gnss_num_satellites", system_health_info->gnss_num_satellites},
-                   {"mag_strength", system_health_info->mag_strength},
-                   {"mag_uncertainty", system_health_info->mag_uncertainty},
-                   {"rc_rssi", system_health_info->rc_rssi},
-                   {"wifi_interface", system_health_info->wifi_interface},
-                   {"wifi_link_quality", system_health_info->wifi_link_quality},
-                   {"wifi_signal_dbm", system_health_info->wifi_signal_dbm},
+                   {"wifi_interface", system_health_info->onboard_computer_info.wifi_interface},
+                   {"wifi_link_quality", system_health_info->onboard_computer_info.wifi_link_quality},
+                   {"wifi_signal_dbm", system_health_info->onboard_computer_info.wifi_signal_dbm},
                    {"node_cpu_loads", node_cpu_loads},
                    {"available_sensors", available_sensors}};
 
@@ -587,6 +587,41 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
 // --------------------------------------------------------------
 // |                       helper methods                       |
 // --------------------------------------------------------------
+crow::json::wvalue IROCBridge::sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details) {
+  crow::json::wvalue details_json;
+  // Try to recover the original type from the string value
+  for (const auto &detail : details) {
+    // boolean case
+    if (detail.value == "true") {
+      details_json[detail.key] = true;
+      continue;
+    }
+
+    if (detail.value == "false") {
+      details_json[detail.key] = false;
+      continue;
+    }
+
+    // nan case
+    if (detail.value == "nan") {
+      details_json[detail.key] = nullptr;
+      continue;
+    }
+
+    double      val{};
+    const auto &s  = detail.value;
+    // numeric case using std::from_chars for better performance and to avoid exceptions
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
+    if (ec == std::errc{} && ptr == s.data() + s.size()) {
+      details_json[detail.key] = val;
+      continue;
+    }
+
+    // fallback: string
+    details_json[detail.key] = detail.value;
+  }
+  return details_json;
+}
 
 void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_msg) {
   json_msg["type"]    = type;
