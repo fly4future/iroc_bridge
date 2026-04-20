@@ -541,8 +541,8 @@ void IROCBridge::parseSensorInfo(mrs_msgs::msg::SensorInfo::ConstSharedPtr senso
 void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSharedPtr system_health_info, const std::string &robot_name) {
   // Create arrays for node_cpu_loads
   json node_cpu_loads = json::list();
-  for (size_t i = 0; i < system_health_info->node_cpu_loads.size(); i++) {
-    const auto &node_cpu_load = system_health_info->node_cpu_loads[i];
+  for (size_t i = 0; i < system_health_info->onboard_computer_info.node_cpu_loads.size(); i++) {
+    const auto &node_cpu_load = system_health_info->onboard_computer_info.node_cpu_loads[i];
 
     // Create a nested array for each node_cpu_load using initializer list
     json node_entry = json::list({node_cpu_load.node_name, node_cpu_load.cpu_load});
@@ -566,16 +566,16 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
 
   // Create the main JSON object using initializer list
   json json_msg = {{"robot_name", robot_name},
-                   {"cpu_load", system_health_info->cpu_load},
-                   {"free_ram", system_health_info->free_ram},
-                   {"total_ram", system_health_info->total_ram},
-                   {"free_hdd", system_health_info->free_hdd},
+                   {"cpu_load", system_health_info->onboard_computer_info.cpu_load},
+                   {"free_ram", system_health_info->onboard_computer_info.free_ram},
+                   {"total_ram", system_health_info->onboard_computer_info.total_ram},
+                   {"free_hdd", system_health_info->onboard_computer_info.free_hdd},
                    {"hw_api_rate", system_health_info->hw_api_rate},
                    {"control_manager_rate", system_health_info->control_manager_rate},
                    {"state_estimation_rate", system_health_info->state_estimation_rate},
-                   {"wifi_interface", system_health_info->wifi_interface},
-                   {"wifi_link_quality", system_health_info->wifi_link_quality},
-                   {"wifi_signal_dbm", system_health_info->wifi_signal_dbm},
+                   {"wifi_interface", system_health_info->onboard_computer_info.wifi_interface},
+                   {"wifi_link_quality", system_health_info->onboard_computer_info.wifi_link_quality},
+                   {"wifi_signal_dbm", system_health_info->onboard_computer_info.wifi_signal_dbm},
                    {"node_cpu_loads", node_cpu_loads},
                    {"available_sensors", available_sensors}};
 
