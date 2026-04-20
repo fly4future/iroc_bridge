@@ -1,24 +1,26 @@
 #include "iroc_bridge/iroc_bridge.hpp"
 
-/* Implementation-only includes */
-#include <diagnostic_msgs/msg/key_value.hpp>
-#include <mrs_lib/mutex.h>
-
-#include <sensor_msgs/msg/battery_state.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
-#include <std_msgs/msg/float64.hpp>
-#include <std_srvs/srv/set_bool.hpp>
-
-#include <mrs_robot_diagnostics/enums/robot_type.h>
-
-#include <iroc_common/call_service.h>
-
+// Standard includes
 #include <unistd.h>
 #include <iostream>
 #include <future>
 #include <unordered_map>
 #include <string>
 #include <algorithm>
+
+/* Implementation-only includes */
+#include <diagnostic_msgs/msg/key_value.hpp>
+#include <mrs_lib/mutex.h>
+#include <mrs_lib/param_loader.h>
+#include <sensor_msgs/msg/battery_state.hpp>
+#include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+
+// IROC messages
+#include <mrs_robot_diagnostics/enums/robot_type.h>
+#include <iroc_common/call_service.h>
+
 
 namespace iroc_bridge
 {
@@ -586,41 +588,39 @@ void IROCBridge::parseSystemHealthInfo(mrs_msgs::msg::SystemHealthInfo::ConstSha
 // |                       helper methods                       |
 // --------------------------------------------------------------
 crow::json::wvalue IROCBridge::sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details) {
-  crow::json::wvalue json;
+  crow::json::wvalue details_json;
   // Try to recover the original type from the string value
-  // numeric case
   for (const auto &detail : details) {
-    try {
-      size_t pos;
-      double val = std::stod(detail.value, &pos);
-      if (pos == detail.value.size()) {
-        json[detail.key] = val;
-        continue;
-      }
-    }
-    catch (...) {
-    }
-
     // boolean case
     if (detail.value == "true") {
-      json[detail.key] = true;
+      details_json[detail.key] = true;
       continue;
     }
+
     if (detail.value == "false") {
-      json[detail.key] = false;
+      details_json[detail.key] = false;
       continue;
     }
 
     // nan case
     if (detail.value == "nan") {
-      json[detail.key] = nullptr;
+      details_json[detail.key] = nullptr;
+      continue;
+    }
+
+    double      val{};
+    const auto &s  = detail.value;
+    // numeric case using std::from_chars for better performance and to avoid exceptions
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
+    if (ec == std::errc{} && ptr == s.data() + s.size()) {
+      details_json[detail.key] = val;
       continue;
     }
 
     // fallback: string
-    json[detail.key] = detail.value;
+    details_json[detail.key] = detail.value;
   }
-  return json;
+  return details_json;
 }
 
 void IROCBridge::sendTelemetryJsonMessage(const std::string &type, json &json_msg) {
