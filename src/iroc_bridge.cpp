@@ -60,13 +60,6 @@ void IROCBridge::initialize() {
 
   const auto robot_names = param_loader.loadParam2<std::vector<std::string>>("network/robot_names");
 
-  // Remove ground-station hostname from robot names
-  std::string              hostname_str(hostname.data());
-  std::vector<std::string> filtered_robot_names = robot_names;
-
-  auto it = std::remove(filtered_robot_names.begin(), filtered_robot_names.end(), hostname_str);
-  filtered_robot_names.erase(it, filtered_robot_names.end());
-
   // Arguments set config file
   const auto server_port = param_loader.loadParam2<int>("iroc_bridge/server_port");
 
@@ -183,8 +176,8 @@ void IROCBridge::initialize() {
   {
     std::scoped_lock lck(robot_handlers_.mtx);
 
-    robot_handlers_.handlers.reserve(filtered_robot_names.size());
-    for (const auto &robot_name : filtered_robot_names) {
+    robot_handlers_.handlers.reserve(robot_names.size());
+    for (const auto &robot_name : robot_names) {
       robot_handler_t robot_handler;
       // To share with fleet manager and planners
       robot_handler.robot_name = robot_name;
