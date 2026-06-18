@@ -60,7 +60,7 @@
 #include <iroc_fleet_manager/action/execute_mission.hpp>
 
 /* MRS diagnostics */
-#include <mrs_robot_diagnostics/enums/robot_type.h>
+#include <mrs_robot_diagnostics/enums/robot_type.hpp>
 
 /* IROC */
 #include <iroc_common/result.h>

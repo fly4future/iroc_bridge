@@ -18,7 +18,7 @@
 #include <std_srvs/srv/set_bool.hpp>
 
 // IROC messages
-#include <mrs_robot_diagnostics/enums/robot_type.h>
+#include <mrs_robot_diagnostics/enums/robot_type.hpp>
 #include <iroc_common/call_service.h>
 
 
