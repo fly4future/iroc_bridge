@@ -57,6 +57,7 @@
 #include <iroc_fleet_manager/srv/get_obstacles_srv.hpp>
 #include <iroc_fleet_manager/srv/get_mission_points_srv.hpp>
 #include <iroc_fleet_manager/srv/upload_fleet_mission_srv.hpp>
+#include <iroc_fleet_manager/srv/unload_fleet_mission_srv.hpp>
 #include <iroc_fleet_manager/action/execute_mission.hpp>
 
 /* MRS diagnostics */
@@ -112,9 +113,9 @@ private:
   rclcpp::Clock::SharedPtr clock_;
 
   rclcpp::CallbackGroup::SharedPtr cbkgrp_subs_;   ///< Callback group for subscribers.
-  rclcpp::CallbackGroup::SharedPtr cbkgrp_ss_;      ///< Callback group for service servers.
-  rclcpp::CallbackGroup::SharedPtr cbkgrp_sc_;      ///< Callback group for service clients.
-  rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_;  ///< Callback group for timers.
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_ss_;     ///< Callback group for service servers.
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_sc_;     ///< Callback group for service clients.
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_; ///< Callback group for timers.
 
   /** \brief Loads config, creates HTTP server sets up subscribers, service clients, WebSocket endpoints, and timers. */
   void initialize(void);
@@ -123,8 +124,8 @@ private:
 
   // | ---------------------- HTTP server --------------------- |
 
-  std::thread                  th_http_srv_;  ///< Thread running the Crow HTTP server.
-  crow::App<crow::CORSHandler> http_srv_;     ///< Crow HTTP server with CORS middleware (port 8080).
+  std::thread                  th_http_srv_; ///< Thread running the Crow HTTP server.
+  crow::App<crow::CORSHandler> http_srv_;    ///< Crow HTTP server with CORS middleware (port 8080).
 
   using result_t = iroc_common::result_t;
 
@@ -214,7 +215,7 @@ private:
    */
   struct robot_handlers_t
   {
-    std::recursive_mutex         mtx;      ///< Guards access to the handlers vector.
+    std::recursive_mutex         mtx; ///< Guards access to the handlers vector.
     std::vector<robot_handler_t> handlers;
   } robot_handlers_;
 
@@ -229,7 +230,7 @@ private:
 
   std::shared_ptr<TimerType> timer_main_;
   /** \brief Polls all robot subscribers for new messages and triggers telemetry parsing/broadcasting. */
-  void                       timerMain();
+  void timerMain();
 
   // | ----------------------- Fleet manager service clients ----------------------- |
 
@@ -240,6 +241,7 @@ private:
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetObstaclesSrv>            sc_get_obstacles_;
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetMissionPointsSrv>        sc_get_mission_data_;
   mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::UploadFleetMissionSrv>      sc_upload_fleet_mission_;
+  mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::UnloadFleetMissionSrv>      sc_unload_fleet_mission_;
 
   // | ----------------------- Action client ----------------------- |
 
@@ -325,6 +327,9 @@ private:
   /** \brief POST: Uploads a fleet mission (type + details JSON) to the fleet manager. */
   crow::response uploadMissionCallback(const crow::request &req);
 
+  /** \brief Removes a fleet mission from the fleet manager. */
+  crow::response unloadMissionCallback();
+
   /** \brief GET: Returns the current mission goal data from the fleet manager. */
   crow::response getMissionCallback(const crow::request &req);
 
@@ -365,7 +370,7 @@ private:
   result_t callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
                        const std::shared_ptr<typename ServiceType::Response> &response);
 
- crow::json::wvalue sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details); 
+  crow::json::wvalue sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details);
 
   // | ----------------------- Background threads & WebSocket state ----------------------- |
 

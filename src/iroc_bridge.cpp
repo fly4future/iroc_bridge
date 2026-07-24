@@ -81,15 +81,26 @@ void IROCBridge::initialize() {
   CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return setObstacleCallback(req); });
-  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return uploadMissionCallback(req); });
 
   // Getters
   CROW_ROUTE(http_srv_, "/safety-area/world-origin").methods(crow::HTTPMethod::Get)([this](const crow::request &req) { return getOriginCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/borders").methods(crow::HTTPMethod::Get)([this](const crow::request &req) { return getSafetyBorderCallback(req); });
   CROW_ROUTE(http_srv_, "/safety-area/obstacles").methods(crow::HTTPMethod::Get)([this](const crow::request &req) { return getObstaclesCallback(req); });
-  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Get)([this](const crow::request &req) { return getMissionCallback(req); });
 
-  // Missions
+  // Mission endpoints
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Post)([this](const crow::request &req) { return uploadMissionCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Get)([this](const crow::request &req) { return getMissionCallback(req); });
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Delete)([this](const crow::request /*&req*/) { return unloadMissionCallback(); });
+  CROW_ROUTE(http_srv_, "/mission").methods(crow::HTTPMethod::Put)([this](const crow::request &req) {
+    auto unload_mission_response = unloadMissionCallback();
+    if (unload_mission_response.code != 200) {
+      return unload_mission_response;
+    }
+
+    return uploadMissionCallback(req);
+  });
+
+  // Mission control endpoints
   // TODO: CROW_REGEX_ROUTE(http_srv_, R"(/fleet/mission/(start|stop|pause))")
   CROW_ROUTE(http_srv_, "/mission/<string>").methods(crow::HTTPMethod::Post)([this](const crow::request &req, const std::string &type) {
     return changeFleetMissionStateCallback(req, type);
@@ -254,6 +265,7 @@ void IROCBridge::initialize() {
   sc_get_obstacles_        = mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetObstaclesSrv>(node_, "~/get_obstacles_svc_in", cbkgrp_sc_);
   sc_get_mission_data_     = mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::GetMissionPointsSrv>(node_, "~/get_mission_data_svc_in", cbkgrp_sc_);
   sc_upload_fleet_mission_ = mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::UploadFleetMissionSrv>(node_, "~/upload_fleet_mission_svc_in", cbkgrp_sc_);
+  sc_unload_fleet_mission_ = mrs_lib::ServiceClientHandler<iroc_fleet_manager::srv::UnloadFleetMissionSrv>(node_, "~/unload_fleet_mission_svc_in", cbkgrp_sc_);
 
   /* // | --------------------- action clients --------------------- | */
 
@@ -602,7 +614,7 @@ crow::json::wvalue IROCBridge::sensorDetailsToJson(const std::vector<diagnostic_
     }
 
     double      val{};
-    const auto &s  = detail.value;
+    const auto &s = detail.value;
     // numeric case using std::from_chars for better performance and to avoid exceptions
     auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
     if (ec == std::errc{} && ptr == s.data() + s.size()) {
@@ -1286,6 +1298,75 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
         error_response["message"] = call_result.message;
         error_response["success"] = false;
         RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission service call failed: " << call_result.message);
+        return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
+      }
+    }
+
+    RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
+    return crow::response(crow::status::OK, response_json);
+  }
+  catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(node_->get_logger(), "Failed to parse JSON: " << e.what());
+    json error_response;
+    error_response["message"] = std::string("Failed to parse JSON: ") + e.what();
+    return crow::response(crow::status::BAD_REQUEST, error_response);
+  }
+}
+
+/**
+ * \brief Callback for the mission unload request. Synchronously unloads the mission
+ * on all robots via the fleet manager unload service and returns per-robot results.
+ *
+ * Returns HTTP 200 with robot_results on full success, HTTP 400 on validation/staging failure,
+ * HTTP 409 if a mission is already executing (Must be stopped first).
+ *
+ * \return res Crow response
+ */
+crow::response IROCBridge::unloadMissionCallback() {
+  RCLCPP_INFO_STREAM(node_->get_logger(), "Processing unloadMissionCallback.");
+
+  try {
+    auto req_msg     = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Request>();
+    auto resp_msg    = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Response>();
+
+    const auto call_result = callService<iroc_fleet_manager::srv::UnloadFleetMissionSrv>(sc_unload_fleet_mission_, req_msg, resp_msg);
+
+    if (!call_result.success) {
+      json error_response;
+      error_response["message"] = call_result.message;
+      error_response["success"] = false;
+      RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission service call failed: " << call_result.message);
+      return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
+    }
+
+    // Build robot_results JSON array
+    json robot_results = json::list();
+    for (size_t i = 0; i < resp_msg->robot_results.size(); i++) {
+      robot_results[i] = {{"robot", resp_msg->robot_results[i].name},
+                          {"success", static_cast<bool>(resp_msg->robot_results[i].success)},
+                          {"message", resp_msg->robot_results[i].message}};
+    }
+
+    json response_json;
+    response_json["success"]       = static_cast<bool>(resp_msg->success);
+    response_json["message"]       = resp_msg->message;
+    response_json["robot_results"] = std::move(robot_results);
+
+
+    if (!call_result.success) {
+      if (!resp_msg->success) {
+        const auto  &msg    = resp_msg->message;
+        crow::status status = crow::status::BAD_REQUEST;
+        if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
+          status = crow::status::CONFLICT;
+        }
+        RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission failed: " << resp_msg->message);
+        return crow::response(status, response_json);
+      } else {
+        json error_response;
+        error_response["message"] = call_result.message;
+        error_response["success"] = false;
+        RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission service call failed: " << call_result.message);
         return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
       }
     }
