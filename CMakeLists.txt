@@ -52,11 +52,8 @@ set(LIBRARIES
 )
 
 ## --------------------------------------------------------------
-
 ## |                           Compile                          |
 ## --------------------------------------------------------------
-
-# Estimation Manager
 
 add_library(IROCBridge SHARED
   src/iroc_bridge.cpp
