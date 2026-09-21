@@ -1262,7 +1262,7 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
 
     const auto call_result = callService<iroc_fleet_manager::srv::UploadFleetMissionSrv>(sc_upload_fleet_mission_, req_msg, resp_msg);
 
-    if (!call_result.success) {
+    if (!call_result.success || resp_msg->message.empty() || resp_msg->robot_results.empty()) {
       json error_response;
       error_response["message"] = call_result.message;
       error_response["success"] = false;
@@ -1283,23 +1283,14 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
     response_json["message"]       = resp_msg->message;
     response_json["robot_results"] = std::move(robot_results);
 
-
-    if (!call_result.success) {
-      if (!resp_msg->success) {
-        const auto  &msg    = resp_msg->message;
-        crow::status status = crow::status::BAD_REQUEST;
-        if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
-          status = crow::status::CONFLICT;
-        }
-        RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
-        return crow::response(status, response_json);
-      } else {
-        json error_response;
-        error_response["message"] = call_result.message;
-        error_response["success"] = false;
-        RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission service call failed: " << call_result.message);
-        return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
+    if (!resp_msg->success) {
+      const auto  &msg    = resp_msg->message;
+      crow::status status = crow::status::BAD_REQUEST;
+      if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
+        status = crow::status::CONFLICT;
       }
+      RCLCPP_WARN_STREAM(node_->get_logger(), "Upload mission failed: " << resp_msg->message);
+      return crow::response(status, response_json);
     }
 
     RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
@@ -1326,12 +1317,12 @@ crow::response IROCBridge::unloadMissionCallback() {
   RCLCPP_INFO_STREAM(node_->get_logger(), "Processing unloadMissionCallback.");
 
   try {
-    auto req_msg     = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Request>();
-    auto resp_msg    = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Response>();
+    auto req_msg  = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Request>();
+    auto resp_msg = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Response>();
 
     const auto call_result = callService<iroc_fleet_manager::srv::UnloadFleetMissionSrv>(sc_unload_fleet_mission_, req_msg, resp_msg);
 
-    if (!call_result.success) {
+    if (!call_result.success || resp_msg->message.empty() || resp_msg->robot_results.empty()) {
       json error_response;
       error_response["message"] = call_result.message;
       error_response["success"] = false;
@@ -1353,22 +1344,14 @@ crow::response IROCBridge::unloadMissionCallback() {
     response_json["robot_results"] = std::move(robot_results);
 
 
-    if (!call_result.success) {
-      if (!resp_msg->success) {
-        const auto  &msg    = resp_msg->message;
-        crow::status status = crow::status::BAD_REQUEST;
-        if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
-          status = crow::status::CONFLICT;
-        }
-        RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission failed: " << resp_msg->message);
-        return crow::response(status, response_json);
-      } else {
-        json error_response;
-        error_response["message"] = call_result.message;
-        error_response["success"] = false;
-        RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission service call failed: " << call_result.message);
-        return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
+    if (!resp_msg->success) {
+      const auto  &msg    = resp_msg->message;
+      crow::status status = crow::status::BAD_REQUEST;
+      if (msg.find("executing") != std::string::npos || msg.find("staged") != std::string::npos || msg.find("busy") != std::string::npos) {
+        status = crow::status::CONFLICT;
       }
+      RCLCPP_WARN_STREAM(node_->get_logger(), "Unload mission failed: " << resp_msg->message);
+      return crow::response(status, response_json);
     }
 
     RCLCPP_INFO_STREAM(node_->get_logger(), "Upload mission successful: " << resp_msg->message);
