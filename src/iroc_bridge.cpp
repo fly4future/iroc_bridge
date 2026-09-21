@@ -1212,7 +1212,7 @@ crow::response IROCBridge::getMissionCallback([[maybe_unused]] const crow::reque
     error_response["success"]    = false;
     error_response["robot_data"] = json::list();
     RCLCPP_WARN_STREAM(node_->get_logger(), error_response["message"].dump());
-    return crow::response(crow::status::INTERNAL_SERVER_ERROR, error_response);
+    return crow::response(crow::status::NOT_FOUND, error_response);
   }
 
   auto mission_goal = response->mission_goal;
