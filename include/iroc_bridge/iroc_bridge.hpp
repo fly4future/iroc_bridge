@@ -60,9 +60,6 @@
 #include <iroc_fleet_manager/srv/unload_fleet_mission_srv.hpp>
 #include <iroc_fleet_manager/action/execute_mission.hpp>
 
-/* MRS diagnostics */
-#include <mrs_robot_diagnostics/enums/robot_type.hpp>
-
 /* IROC */
 #include <iroc_common/result.h>
 
@@ -94,8 +91,6 @@ using Mission           = iroc_fleet_manager::action::ExecuteMission;
 using GoalHandleMission = rclcpp_action::ServerGoalHandle<Mission>;
 using MissionClient     = rclcpp_action::Client<iroc_fleet_manager::action::ExecuteMission>;
 using MissionGoalHandle = rclcpp_action::ClientGoalHandle<iroc_fleet_manager::action::ExecuteMission>;
-typedef mrs_robot_diagnostics::robot_type_t robot_type_t;
-
 /**
  * \brief HTTP/WebSocket-to-ROS 2 bridge (ROS 2 composable component).
  *
