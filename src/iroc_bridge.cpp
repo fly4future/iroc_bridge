@@ -442,8 +442,8 @@ void IROCBridge::parseGeneralRobotInfo(mrs_msgs::msg::GeneralRobotInfo::ConstSha
        {{"voltage", general_robot_info->battery_state.voltage},
         {"percentage", general_robot_info->battery_state.percentage},
         {"wh_drained", general_robot_info->battery_state.wh_drained}}},
-      {"ready_to_start", general_robot_info->ready_to_start},
-      {"problems_preventing_start", json::list(general_robot_info->problems_preventing_start.begin(), general_robot_info->problems_preventing_start.end())},
+      {"ready_to_start", general_robot_info->ready_for_automatic_takeoff},
+      {"problems_preventing_start", json::list(general_robot_info->missing_for_automatic_takeoff.begin(), general_robot_info->missing_for_automatic_takeoff.end())},
       {"errors", json::list(general_robot_info->errors.begin(), general_robot_info->errors.end())}};
 
   sendTelemetryJsonMessage("GeneralRobotInfo", json_msg);
@@ -504,7 +504,7 @@ void IROCBridge::parseControlInfo(mrs_msgs::msg::ControlInfo::ConstSharedPtr con
                    {"available_trackers", json::list(control_info->available_trackers.begin(), control_info->available_trackers.end())},
                    {"active_constraints", control_info->active_constraints},
                    {"available_constraints", json::list(control_info->available_constraints.begin(), control_info->available_constraints.end())},
-                   {"thrust", control_info->thrust}};
+                   {"thrust", control_info->throttle}};
 
   sendTelemetryJsonMessage("ControlInfo", json_msg);
 }
