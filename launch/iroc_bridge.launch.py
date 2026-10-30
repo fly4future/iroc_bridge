@@ -94,7 +94,7 @@ def launch_setup(context, *args, **kwargs):
             (f"/{robot_name}/land_svc_in", f"/{robot_name}/uav_manager/land"),
             (f"/{robot_name}/hover_svc_in", f"/{robot_name}/control_manager/hover"),
             (f"/{robot_name}/land_home_svc_in", f"/{robot_name}/uav_manager/land_home"),
-            (f"/{robot_name}/set_origin_svc_in", f"/{robot_name}/estimation_manager/set_origin"),
+            (f"/{robot_name}/set_origin_svc_in", f"/{robot_name}/estimation_manager/set_world_origin"),
             (f"/{robot_name}/set_safety_area_svc_in",
              f"/{robot_name}/safety_area_manager/set_safety_border"),
             (f"/{robot_name}/set_obstacle_svc_in",
