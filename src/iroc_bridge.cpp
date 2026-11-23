@@ -339,6 +339,7 @@ void IROCBridge::timerMain() {
       parseSensorInfo(rh.sh_sensor_info.getMsg(), robot_name);
     }
   }
+
 }
 
 // --------------------------------------------------------------
@@ -657,14 +658,15 @@ void IROCBridge::sendFeedbackJsonMessage(json &json_msg) {
 }
 
 template <typename ServiceType>
-IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request) {
-  return iroc_common::callService(sc, request, node_->get_logger(), clock_);
+IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
+                                             const std::chrono::milliseconds timeout) {
+  return iroc_common::callService(sc, request, node_->get_logger(), clock_, timeout);
 }
 
 template <typename ServiceType>
 IROCBridge::result_t IROCBridge::callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
-                                             const std::shared_ptr<typename ServiceType::Response> &response) {
-  return iroc_common::callService(sc, request, response, node_->get_logger(), clock_);
+                                             const std::shared_ptr<typename ServiceType::Response> &response, const std::chrono::milliseconds timeout) {
+  return iroc_common::callService(sc, request, response, node_->get_logger(), clock_, timeout);
 }
 
 void IROCBridge::routine_death_check() {
@@ -1259,7 +1261,7 @@ crow::response IROCBridge::uploadMissionCallback(const crow::request &request) {
     req_msg->details = details;
     req_msg->uuid    = uuid;
 
-    const auto call_result = callService<iroc_fleet_manager::srv::UploadFleetMissionSrv>(sc_upload_fleet_mission_, req_msg, resp_msg);
+    const auto call_result = callService<iroc_fleet_manager::srv::UploadFleetMissionSrv>(sc_upload_fleet_mission_, req_msg, resp_msg, FLEET_SERVICE_TIMEOUT);
 
     if (!call_result.success || resp_msg->message.empty() || resp_msg->robot_results.empty()) {
       json error_response;
@@ -1319,7 +1321,7 @@ crow::response IROCBridge::unloadMissionCallback() {
     auto req_msg  = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Request>();
     auto resp_msg = std::make_shared<iroc_fleet_manager::srv::UnloadFleetMissionSrv::Response>();
 
-    const auto call_result = callService<iroc_fleet_manager::srv::UnloadFleetMissionSrv>(sc_unload_fleet_mission_, req_msg, resp_msg);
+    const auto call_result = callService<iroc_fleet_manager::srv::UnloadFleetMissionSrv>(sc_unload_fleet_mission_, req_msg, resp_msg, FLEET_SERVICE_TIMEOUT);
 
     if (!call_result.success || resp_msg->message.empty() || resp_msg->robot_results.empty()) {
       json error_response;
@@ -1414,7 +1416,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
         auto req_msg           = std::make_shared<FleetReq>();
         auto resp_msg          = std::make_shared<FleetSrv::Response>();
         req_msg->type          = FleetReq::TYPE_START;
-        const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg);
+        const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg, FLEET_SERVICE_TIMEOUT);
         if (!call_result.success)
           return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + call_result.message + "\"}");
         json response_json;
@@ -1488,7 +1490,7 @@ crow::response IROCBridge::changeFleetMissionStateCallback([[maybe_unused]] cons
   auto req_msg           = std::make_shared<FleetReq>();
   auto resp_msg          = std::make_shared<FleetSrv::Response>();
   req_msg->type          = op_type;
-  const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg);
+  const auto call_result = callService<FleetSrv>(sc_change_fleet_mission_state_, req_msg, resp_msg, FLEET_SERVICE_TIMEOUT);
   if (!call_result.success)
     return crow::response(crow::status::INTERNAL_SERVER_ERROR, "{\"message\": \"" + call_result.message + "\"}");
   json response_json;
@@ -1529,7 +1531,7 @@ crow::response IROCBridge::changeRobotMissionStateCallback([[maybe_unused]] cons
   request->robot_name = robot_name;
   request->type       = it->second;
 
-  const auto resp = callService<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state_, request);
+  const auto resp = callService<iroc_fleet_manager::srv::ChangeRobotMissionStateSrv>(sc_change_robot_mission_state_, request, FLEET_SERVICE_TIMEOUT);
 
   if (!resp.success) {
     json_msg["message"] = "Call was not successful: " + resp.message;

@@ -61,6 +61,7 @@
 #include <iroc_fleet_manager/action/execute_mission.hpp>
 
 /* IROC */
+#include <iroc_common/call_service.h>
 #include <iroc_common/result.h>
 
 /* Eigen */
@@ -356,14 +357,20 @@ private:
 
   // | ----------------------- Service call helpers ----------------------- |
 
+  /** \brief Limit for fleet manager services that call every robot in turn (each call to a robot
+   *         is itself limited to iroc_common::DEFAULT_SERVICE_TIMEOUT). */
+  static constexpr std::chrono::milliseconds FLEET_SERVICE_TIMEOUT{std::chrono::seconds(60)};
+
   /** \brief Convenience wrapper around iroc_common::callService() (fire-and-forget variant). */
   template <typename ServiceType>
-  result_t callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request);
+  result_t callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
+                       std::chrono::milliseconds timeout = iroc_common::DEFAULT_SERVICE_TIMEOUT);
 
   /** \brief Convenience wrapper around iroc_common::callService() (response-capturing variant). */
   template <typename ServiceType>
   result_t callService(mrs_lib::ServiceClientHandler<ServiceType> &sc, const std::shared_ptr<typename ServiceType::Request> &request,
-                       const std::shared_ptr<typename ServiceType::Response> &response);
+                       const std::shared_ptr<typename ServiceType::Response> &response,
+                       std::chrono::milliseconds timeout = iroc_common::DEFAULT_SERVICE_TIMEOUT);
 
   crow::json::wvalue sensorDetailsToJson(const std::vector<diagnostic_msgs::msg::KeyValue> &details);
 
